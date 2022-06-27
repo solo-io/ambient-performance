@@ -1,0 +1,205 @@
+# This is a slightly modified/simplified version of the scripts in
+# https://github.com/istio/tools/tree/master/perf/benchmark
+# note that the port 8080 name was changed so istio wouldn't detect it as HTTP,
+# as we want to test mTLS latency without L7 parsing.
+
+# Source: benchmark/templates/fortio.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nighthawk-test-server-config
+data:
+  nighthawk-test-server-captured.yaml: |
+    admin:
+      access_log_path: /var/lib/logs/nighthawk_test_server_admin_access_captured.log
+      profile_path: /var/lib/logs/nighthawk_test_server_captured.prof
+      address:
+        socket_address: { address: 0.0.0.0, port_value: 9080 }
+    static_resources:
+      listeners:
+      - address:
+          socket_address:
+            address: 0.0.0.0
+            port_value: 8080
+        filter_chains:
+        - filters:
+          - name: envoy.http_connection_manager
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+              generate_request_id: false
+              codec_type: auto
+              stat_prefix: ingress_http
+              route_config:
+                name: local_route
+                virtual_hosts:
+                - name: service
+                  domains:
+                  - "*"
+              http_filters:
+              - name: dynamic-delay
+                typed_config:
+                  "@type": type.googleapis.com/nighthawk.server.ResponseOptions
+
+              - name: test-server
+                typed_config:
+                  "@type": type.googleapis.com/nighthawk.server.ResponseOptions
+                  response_body_size: 10
+                  v3_response_headers:
+                    - { header: { key: "foo", value: "bar" } }
+                    - {
+                        header: { key: "foo", value: "bar2" },
+                        append: true,
+                      }
+                    - { header: { key: "x-nh", value: "1" } }
+
+              # - name: test-server
+              #   config:
+              #     response_body_size: 1024
+              #     response_headers:
+              #     - { header: { key: "x-nighthawk", value: "captured"}}
+              - name: envoy.filters.http.router
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                  dynamic_stats: false
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nhclient
+---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: nhclient
+#   labels:
+#     app: nhclient
+#     service: nhclient
+# spec:
+#   ports:
+#   - name: not-http-echo
+#     port: 9999
+#     protocol: TCP
+#   selector:
+#     app: nhclient
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nhserver
+spec:
+  ports:
+  - name: tcp-enforcment
+    port: 8080
+    protocol: TCP
+  selector:
+    app: nhserver
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: nhserver
+  name: nhserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nhserver
+  template:
+    metadata:
+      labels:
+        app: nhserver
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - "nhclient"
+            topologyKey: "kubernetes.io/hostname"
+      volumes:
+      - name: shared-data
+        emptyDir: {}
+      - name: nighthawk-test-server-config
+        configMap:
+          name: nighthawk-test-server-config
+      containers:
+      - name: captured
+        securityContext:
+          runAsUser: 1
+        volumeMounts:
+        - name: shared-data
+          mountPath: /var/lib/logs
+        - name: nighthawk-test-server-config
+          mountPath: /var/lib/nighthawk 
+        image: envoyproxy/nighthawk-dev:latest
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        args:
+        - nighthawk_test_server
+        - -c
+        - /var/lib/nighthawk/nighthawk-test-server-captured.yaml
+        - --base-id
+        - "1"
+      - name: shell
+        securityContext:
+          runAsUser: 1
+        volumeMounts:
+        - name: shared-data
+          mountPath: /var/lib/logs
+        - name: nighthawk-test-server-config
+          mountPath: /var/lib/nighthawk
+        image: cfmanteiga/alpine-bash-curl-jq:latest
+        args:
+        - /bin/sleep
+        - 3650d
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: nhclient
+  name: nhclient
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nhclient
+  template:
+    metadata:
+      labels:
+        app: nhclient
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - "nhserver"
+            topologyKey: "kubernetes.io/hostname"      
+      serviceAccountName: nhclient
+      volumes:
+      containers:
+      - name: nighthawk
+        securityContext:
+          runAsUser: 1
+        image: envoyproxy/nighthawk-dev:latest
+        args:
+        - /bin/sleep
+        - 3650d
+      - name: shell
+        securityContext:
+          runAsUser: 1
+        image: cfmanteiga/alpine-bash-curl-jq:latest
+        args:
+        - /bin/sleep
+        - 3650d
