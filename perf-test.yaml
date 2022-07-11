@@ -158,7 +158,7 @@ spec:
         image: cfmanteiga/alpine-bash-curl-jq:latest
         args:
         - /bin/sleep
-        - 3650d
+        - 1234d
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -195,11 +195,11 @@ spec:
         image: envoyproxy/nighthawk-dev:latest
         args:
         - /bin/sleep
-        - 3650d
+        - 1234d
       - name: shell
         securityContext:
           runAsUser: 1
         image: cfmanteiga/alpine-bash-curl-jq:latest
         args:
         - /bin/sleep
-        - 3650d
+        - 2345d
