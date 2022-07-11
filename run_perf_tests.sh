@@ -14,8 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-NIGHTHAWK_PARAMS="--concurrency 1 --output-format json --rps 400 --duration 60"
-# NIGHTHAWK_PARAMS="--concurrency 1 --output-format json --max-requests-per-connection 1 --rps 400 --duration 60"
+NIGHTHAWK_PARAMS="--concurrency 1 --output-format json --rps 200 --duration 60"
+# NIGHTHAWK_PARAMS="--concurrency 1 --output-format json --max-requests-per-connection 1 --rps 200 --duration 60"
 RESULTS_FILE="perf_tests_results_tcp.out"
 SERVICE_PORT_NAME="tcp-enforcment"
 
@@ -31,9 +31,13 @@ runPerfTest()
 {
     echo -e "\n-= $1 =-" >> "$RESULTS_FILE"
     echo "Executing performance tests for: $1.."
-    eval kubectl exec deploy/nhclient -c nighthawk -- nighthawk_client "$NIGHTHAWK_PARAMS" http://nhserver:8080/ > perf_test_results.json
-    jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "p50: \(.percentiles[]|select(.percentile == 0.5).duration)\np90: \(.percentiles[]|select(.percentile == 0.9).duration)\np99: \(.percentiles[]|select(.percentile == 0.990625).duration)"' perf_test_results.json >> $RESULTS_FILE
-    jq -r '.results[].statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "Max: \(.max)"' perf_test_results.json >> "$RESULTS_FILE"
+    eval kubectl exec deploy/nhclient -c nighthawk -- nighthawk_client "$NIGHTHAWK_PARAMS" http://nhserver:8080/ > "$DIR"/perf_test_results.json
+    {
+        echo "p50: $(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.5).duration)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')ms";
+        echo "p90: $(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.9).duration)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')ms";
+        echo "p99: $(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.990625).duration)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')ms";
+        echo "Max: $(jq -r '.results[].statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.max)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')ms";
+    }  >> "$RESULTS_FILE"
 }
 
 lockDownMutualTls() 
@@ -57,49 +61,71 @@ deployPerfTestWorkloads()
     sleep 5
 }
 
+noMesh()
+{
+    deployPerfTestWorkloads
+
+    # Run performance test and write results to file
+    runPerfTest "No Mesh"
+
+    # Cleanup before next test
+    kubectl delete -f "$DIR"/perf-test.yaml
+}
+
+sidecars()
+{
+    # Setup Istio mesh
+    go run istioctl/cmd/istioctl/main.go install -d manifests/ --set hub="$HUB" --set tag="$TAG" -y --set profile=default --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
+    lockDownMutualTls
+    kubectl label namespace default istio-injection=enabled
+    deployPerfTestWorkloads
+
+    # Run performance test and write results to file
+    runPerfTest "With Istio Sidecars"
+
+    # Cleanup before next test
+    kubectl delete -f "$DIR"/perf-test.yaml
+    kubectl delete ns istio-system
+    kubectl label namespace default istio-injection-
+}
+
+ambientNoPEPs()
+{
+    # Setup Ambient Mesh
+    PROFILE="ambient"
+    if [ "${K8S_TYPE}" == aws ]; then
+        PROFILE="ambient-aws"
+    fi
+    go run istioctl/cmd/istioctl/main.go install -d manifests/ --set hub="$HUB" --set tag="$TAG" -y --set profile=$PROFILE --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
+
+    lockDownMutualTls
+    deployPerfTestWorkloads
+
+    ./redirect.sh ambient
+    UPDATE_IPSET_ONCE=true ./tmp-update-pod-set.sh
+
+    # Run performance test and write results to file
+    runPerfTest "Ambient (only uProxies)"
+}
+
+ambientWithPEPs()
+{
+    # Deploy PEP proxies (client and server)
+    envsubst < "$DIR"/server-proxy.yaml | kubectl apply -f -
+    envsubst < "$DIR"/client-proxy.yaml | kubectl apply -f -
+    kubectl wait pods -n default -l ambient-type=pep --for condition=Ready --timeout=90s
+    UPDATE_IPSET_ONCE=true ./tmp-update-pod-set.sh
+
+    # Run performance test and write results to file
+    runPerfTest "Ambient (uProxies + PEPs)"
+}
+
 pushd "$AMBIENT_REPO_DIR" || exit
 
-deployPerfTestWorkloads
-
-# Run performance test and write results to file
-runPerfTest "No Mesh"
-
-# Cleanup before next test
-kubectl delete -f "$DIR"/perf-test.yaml
-
-# Setup Istio mesh
-go run istioctl/cmd/istioctl/main.go install -d manifests/ --set hub="$HUB" --set tag="$TAG" -y --set profile=default --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
-lockDownMutualTls
-kubectl label namespace default istio-injection=enabled
-deployPerfTestWorkloads
-
-# Run performance test and write results to file
-runPerfTest "With Istio Sidecars"
-
-# Cleanup before next test
-kubectl delete -f "$DIR"/perf-test.yaml
-kubectl delete ns istio-system
-kubectl label namespace default istio-injection-
-
-# Setup Ambient Mesh
-go run istioctl/cmd/istioctl/main.go install -d manifests/ --set hub="$HUB" --set tag="$TAG" -y --set profile=ambient --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
-lockDownMutualTls
-deployPerfTestWorkloads
-
-./redirect.sh ambient
-UPDATE_IPSET_ONCE=true ./tmp-update-pod-set.sh
-
-# Run performance test and write results to file
-runPerfTest "Ambient (only uProxies)"
-
-# Deploy PEP proxies (client and server)
-envsubst < "$DIR"/server-proxy.yaml | kubectl apply -f -
-envsubst < "$DIR"/client-proxy.yaml | kubectl apply -f -
-kubectl wait pods -n default -l ambient-type=pep --for condition=Ready --timeout=90s
-UPDATE_IPSET_ONCE=true ./tmp-update-pod-set.sh
-
-# Run performance test and write results to file
-runPerfTest "Ambient (uProxies + PEPs)"
+noMesh
+sidecars
+ambientNoPEPs
+ambientWithPEPs
 
 popd || exit
 
