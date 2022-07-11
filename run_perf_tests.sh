@@ -16,28 +16,28 @@
 
 NIGHTHAWK_PARAMS="--concurrency 1 --output-format json --rps 200 --duration 60"
 # NIGHTHAWK_PARAMS="--concurrency 1 --output-format json --max-requests-per-connection 1 --rps 200 --duration 60"
-RESULTS_FILE="perf_tests_results_tcp.out"
+RESULTS_FILE="perf_tests_results_tcp.csv"
 SERVICE_PORT_NAME="tcp-enforcment"
 
 DIR="$( cd "$( dirname "$0" )" && pwd )"
 RESULTS_FILE="$DIR/$RESULTS_FILE"
 AMBIENT_REPO_DIR=$DIR/../istio-sidecarless
 
-echo "Run time: $(date)" > "$RESULTS_FILE"
-echo "Nighthawk client parameters: $NIGHTHAWK_PARAMS" >> "$RESULTS_FILE"
-echo "Service port name: $SERVICE_PORT_NAME" >> "$RESULTS_FILE"
+RESULTS_NAMES=()
+RESULTS_P50=()
+RESULTS_P90=()
+RESULTS_P99=()
+RESULTS_MAX=()
 
 runPerfTest()
 {
-    echo -e "\n-= $1 =-" >> "$RESULTS_FILE"
     echo "Executing performance tests for: $1.."
+    RESULTS_NAMES+=("$1")
     eval kubectl exec deploy/nhclient -c nighthawk -- nighthawk_client "$NIGHTHAWK_PARAMS" http://nhserver:8080/ > "$DIR"/perf_test_results.json
-    {
-        echo "p50: $(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.5).duration)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')ms";
-        echo "p90: $(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.9).duration)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')ms";
-        echo "p99: $(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.990625).duration)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')ms";
-        echo "Max: $(jq -r '.results[].statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.max)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')ms";
-    }  >> "$RESULTS_FILE"
+    RESULTS_P50+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.5).duration)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')");
+    RESULTS_P90+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.9).duration)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')");
+    RESULTS_P99+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.990625).duration)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')");
+    RESULTS_MAX+=("$(jq -r '.results[].statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.max)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')");
 }
 
 lockDownMutualTls() 
@@ -120,6 +120,28 @@ ambientWithPEPs()
     runPerfTest "Ambient (uProxies + PEPs)"
 }
 
+writeResults()
+{
+    echo "Run time: $(date)" > "$RESULTS_FILE"
+    echo "Nighthawk client parameters: $NIGHTHAWK_PARAMS" >> "$RESULTS_FILE"
+    echo "Service port name: $SERVICE_PORT_NAME" >> "$RESULTS_FILE"
+
+    printf "\n," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_NAMES[$i]}," >> "$RESULTS_FILE"; done
+    
+    printf "\np50," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_P50[$i]}," >> "$RESULTS_FILE"; done
+    
+    printf "\np90," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_P90[$i]}," >> "$RESULTS_FILE"; done
+    
+    printf "\np99," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_P99[$i]}," >> "$RESULTS_FILE"; done
+    
+    printf "\nMax," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_MAX[$i]}," >> "$RESULTS_FILE"; done
+}
+
 pushd "$AMBIENT_REPO_DIR" || exit
 
 noMesh
@@ -128,6 +150,8 @@ ambientNoPEPs
 ambientWithPEPs
 
 popd || exit
+
+writeResults
 
 # Cleanup the cluster
 # "$AMBIENT_REPO_DIR"/redirect.sh ambient clean
