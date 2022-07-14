@@ -24,39 +24,21 @@ The script assumes the cluster has no workloads or configuration from past execu
 
 To execute the script run it from the project root folder:
 ```sh
-./local-test-utils/performance-tests/run_perf_tests.sh
+./run_perf_tests.sh
 ```
 
-Output to the execution will be written to the output file mentioned in the script. Example:
+Output to the execution will be written to the output file mentioned in the script in a CSV format. Example:
 
-```
-Run time: Thu Jun 16 11:06:20 UTC 2022
-Nighthawk client parameters: --concurrency 1 --output-format json --rps 400 --duration 60
+```csv
+Run time: Mon Jul 11 10:35:26 IDT 2022
+Nighthawk client parameters: --concurrency 1 --output-format json --rps 200 --duration 10
 Service port name: tcp-enforcment
 
--= No Mesh =-
-p50: 0.000166863s
-p90: 0.000203223s
-p99: 0.000260815s
-Max: 0.001706431s
-
--= With Istio Sidecars =-
-p50: 0.000386031s
-p90: 0.000462031s
-p99: 0.000564159s
-Max: 0.030631935s
-
--= Ambient (only uProxies) =-
-p50: 0.000438783s
-p90: 0.000525663s
-p99: 0.000639839s
-Max: 0.029927423s
-
--= Ambient (uProxies + PEPs) =-
-p50: 0.000602591s
-p90: 0.000708479s
-p99: 0.000861727s
-Max: 0.053991423s
+,No Mesh,With Istio Sidecars,Ambient (only uProxies),Ambient (uProxies + PEPs),
+p50,0.999807,1.20141,1.35635,1.63411,
+p90,1.20627,1.52237,2.02035,2.86694,
+p99,5.14918,5.61587,6.44147,21.0422,
+Max,31.6416,18.8078,16.1807,77.7257,
 ```
 
 ## Few Things To Notice
