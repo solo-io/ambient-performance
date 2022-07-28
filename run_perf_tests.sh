@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -ex
+set -x
 
 NIGHTHAWK_PARAMS="--concurrency 1 --output-format json --rps 200 --duration 60"
 # NIGHTHAWK_PARAMS="--concurrency 1 --output-format json --max-requests-per-connection 1 --rps 200 --duration 60"
