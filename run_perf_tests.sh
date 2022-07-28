@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+set -ex
+
 NIGHTHAWK_PARAMS="--concurrency 1 --output-format json --rps 200 --duration 60"
 # NIGHTHAWK_PARAMS="--concurrency 1 --output-format json --max-requests-per-connection 1 --rps 200 --duration 60"
 RESULTS_FILE="perf_tests_results_tcp.csv"
@@ -84,6 +86,7 @@ sidecars()
     runPerfTest "With Istio Sidecars"
 
     # Cleanup before next test
+    go run istioctl/cmd/istioctl/main.go x uninstall --purge -y
     kubectl delete -f "$DIR"/perf-test.yaml
     kubectl delete ns istio-system
     kubectl label namespace default istio-injection-
@@ -95,14 +98,13 @@ ambientNoPEPs()
     PROFILE="ambient"
     if [ "${K8S_TYPE}" == aws ]; then
         PROFILE="ambient-aws"
+    elif [ "${K8S_TYPE}" == gcp ]; then
+        PROFILE="ambient-gke"
     fi
     go run istioctl/cmd/istioctl/main.go install -d manifests/ --set hub="$HUB" --set tag="$TAG" -y --set profile=$PROFILE --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
 
     lockDownMutualTls
     deployPerfTestWorkloads
-
-    ./redirect.sh ambient
-    UPDATE_IPSET_ONCE=true ./tmp-update-pod-set.sh
 
     # Run performance test and write results to file
     runPerfTest "Ambient (only uProxies)"
@@ -114,7 +116,6 @@ ambientWithPEPs()
     envsubst < "$DIR"/server-proxy.yaml | kubectl apply -f -
     envsubst < "$DIR"/client-proxy.yaml | kubectl apply -f -
     kubectl wait pods -n default -l ambient-type=pep --for condition=Ready --timeout=90s
-    UPDATE_IPSET_ONCE=true ./tmp-update-pod-set.sh
 
     # Run performance test and write results to file
     runPerfTest "Ambient (uProxies + PEPs)"
