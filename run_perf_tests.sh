@@ -27,8 +27,9 @@ RESULTS_NAMES=()
 RESULTS_P50=()
 RESULTS_P90=()
 RESULTS_P99=()
+RESULTS_P999=()
+RESULTS_P9999=()
 RESULTS_MAX=()
-
 runPerfTest()
 {
     echo "Executing performance tests for: $1.."
@@ -37,6 +38,8 @@ runPerfTest()
     RESULTS_P50+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.5).duration)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')");
     RESULTS_P90+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.9).duration)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')");
     RESULTS_P99+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.990625).duration)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')");
+    RESULTS_P999+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.9990234375).duration)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')");
+    RESULTS_P9999+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.99990234375).duration)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')");
     RESULTS_MAX+=("$(jq -r '.results[].statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.max)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')");
 }
 
@@ -63,6 +66,8 @@ deployPerfTestWorkloads()
 
 noMesh()
 {
+    echo ""
+
     deployPerfTestWorkloads
 
     # Run performance test and write results to file
@@ -70,10 +75,16 @@ noMesh()
 
     # Cleanup before next test
     kubectl delete -f "$DIR"/perf-test.yaml
+
+    # Wait for them to be deleted
+    kubectl wait pods -n default -l app=nhclient --for=delete --timeout=90s
+    kubectl wait pods -n default -l app=nhserver --for=delete --timeout=90s
 }
 
 sidecars()
 {
+    echo ""
+
     # Setup Istio mesh
     go run istioctl/cmd/istioctl/main.go install -d manifests/ --set hub="$HUB" --set tag="$TAG" -y --set profile=default --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
     lockDownMutualTls
@@ -84,25 +95,29 @@ sidecars()
     runPerfTest "With Istio Sidecars"
 
     # Cleanup before next test
+    go run istioctl/cmd/istioctl/main.go x uninstall --purge -y
     kubectl delete -f "$DIR"/perf-test.yaml
+    kubectl wait pods -n default -l app=nhclient --for=delete --timeout=90s
+    kubectl wait pods -n default -l app=nhserver --for=delete --timeout=90s
     kubectl delete ns istio-system
     kubectl label namespace default istio-injection-
 }
 
 ambientNoPEPs()
 {
+    echo ""
+
     # Setup Ambient Mesh
     PROFILE="ambient"
     if [ "${K8S_TYPE}" == aws ]; then
         PROFILE="ambient-aws"
+    elif [ "${K8S_TYPE}" == gcp ]; then
+        PROFILE="ambient-gke"
     fi
     go run istioctl/cmd/istioctl/main.go install -d manifests/ --set hub="$HUB" --set tag="$TAG" -y --set profile=$PROFILE --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
 
     lockDownMutualTls
     deployPerfTestWorkloads
-
-    ./redirect.sh ambient
-    UPDATE_IPSET_ONCE=true ./tmp-update-pod-set.sh
 
     # Run performance test and write results to file
     runPerfTest "Ambient (only uProxies)"
@@ -110,14 +125,19 @@ ambientNoPEPs()
 
 ambientWithPEPs()
 {
+    echo ""
+
     # Deploy PEP proxies (client and server)
     envsubst < "$DIR"/server-proxy.yaml | kubectl apply -f -
     envsubst < "$DIR"/client-proxy.yaml | kubectl apply -f -
     kubectl wait pods -n default -l ambient-type=pep --for condition=Ready --timeout=90s
-    UPDATE_IPSET_ONCE=true ./tmp-update-pod-set.sh
+    sleep 10
 
     # Run performance test and write results to file
     runPerfTest "Ambient (uProxies + PEPs)"
+
+    # Clean up proxies
+    kubectl delete -f "$DIR"/server-proxy.yaml -f "$DIR"/client-proxy.yaml -f "$DIR"/perf-test.yaml
 }
 
 writeResults()
@@ -128,16 +148,22 @@ writeResults()
 
     printf "\n," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_NAMES[$i]}," >> "$RESULTS_FILE"; done
-    
+
     printf "\np50," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_P50[$i]}," >> "$RESULTS_FILE"; done
-    
+
     printf "\np90," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_P90[$i]}," >> "$RESULTS_FILE"; done
-    
+
     printf "\np99," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_P99[$i]}," >> "$RESULTS_FILE"; done
-    
+
+    printf "\np99.9," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_P999[$i]}," >> "$RESULTS_FILE"; done
+
+    printf "\np99.99," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_P9999[$i]}," >> "$RESULTS_FILE"; done
+
     printf "\nMax," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_MAX[$i]}," >> "$RESULTS_FILE"; done
 }
@@ -146,14 +172,17 @@ pushd "$AMBIENT_REPO_DIR" || exit
 
 noMesh
 sidecars
+# Label namespace, as the CNI relies on this label
+kubectl label ns default istio.io/dataplane-mode=ambient --overwrite
 ambientNoPEPs
 ambientWithPEPs
+
+# Clean up cluster
+go run istioctl/cmd/istioctl/main.go x uninstall --purge -y
+kubectl delete ns istio-system || true
+kubectl label ns default istio-injection- || true
+kubectl label ns default istio.io/dataplane-mode- || true
 
 popd || exit
 
 writeResults
-
-# Cleanup the cluster
-# "$AMBIENT_REPO_DIR"/redirect.sh ambient clean
-# kubectl delete -f .
-# kubectl delete ns istio-system
