@@ -41,6 +41,14 @@ p99,5.14918,5.61587,6.44147,21.0422,
 Max,31.6416,18.8078,16.1807,77.7257,
 ```
 
+You can convert the CSV portion of the results to a nice table with conv_results.sh:
+
+```sh
+./conv_results.txt
+```
+
+This will output the results in an ASCII table to stdout.
+
 ## Few Things To Notice
 * mTLS is enabled in the service mesh in the Istio/Ambient scenarios
 * You can modify the scripts arguments to change the tests behavior. See script variables descriptions below.

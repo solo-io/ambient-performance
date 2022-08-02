@@ -103,6 +103,31 @@ sidecars()
     kubectl label namespace default istio-injection-
 }
 
+linkerdTest()
+{
+    echo ""
+    linkerd install | kubectl apply -f -
+    linkerd check
+
+    sed "s/tcp-enforcment/$SERVICE_PORT_NAME/g" "$DIR"/perf-test.yaml | linkerd inject - | kubectl apply -f -
+    sleep 3
+    kubectl wait pods -n default -l app=nhclient --for condition=Ready --timeout=90s
+    kubectl wait pods -n default -l app=nhserver --for condition=Ready --timeout=90s
+    sleep 5
+
+    runPerfTest "Linkerd"
+
+    # Cleanup before next test
+    kubectl delete -f "$DIR"/perf-test.yaml
+
+    # Wait for them to be deleted
+    kubectl wait pods -n default -l app=nhclient --for=delete --timeout=90s
+    kubectl wait pods -n default -l app=nhserver --for=delete --timeout=90s
+
+    linkerd uninstall | kubectl delete -f -
+    sleep 15
+}
+
 ambientNoPEPs()
 {
     echo ""
@@ -172,6 +197,7 @@ pushd "$AMBIENT_REPO_DIR" || exit
 
 noMesh
 sidecars
+linkerdTest
 # Label namespace, as the CNI relies on this label
 kubectl label ns default istio.io/dataplane-mode=ambient --overwrite
 ambientNoPEPs
