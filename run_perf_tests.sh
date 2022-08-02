@@ -105,6 +105,17 @@ sidecars()
 
 linkerdTest()
 {
+    if [[ -z "$LINKERD" ]]; then
+        RESULTS_NAMES+=("Linkerd")
+        RESULTS_P50+=("Skipped")
+        RESULTS_P90+=("Skipped")
+        RESULTS_P99+=("Skipped")
+        RESULTS_P999+=("Skipped")
+        RESULTS_P9999+=("Skipped")
+        RESULTS_MAX+=("Skipped")
+        return 0
+    fi
+
     echo ""
     linkerd install | kubectl apply -f -
     linkerd check

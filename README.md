@@ -17,6 +17,7 @@ By default it assumes the repo has been cloned under the same parent directory o
 The [run_perf_tests.sh](run_perf_tests.sh) script will use the K8s cluster in the current config context for running the performance tests in different configurations:
 * No mesh (pure K8s)
 * Istio Sidecars
+* Linkerd Proxy (only tested if LINKERD environment variable is defined, simplest way is `LINKERD=1`)
 * Ambient (only uProxies)
 * Ambient (uProxies and PEPs)
 
