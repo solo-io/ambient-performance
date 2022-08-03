@@ -110,7 +110,7 @@ spec:
   meshConfig:
     defaultConfig:
       proxyMetadata:
-        ISTIO_META_ENABLE_HBONE: "true"
+        ISTIO_META_ENABLE_HBONE: "false"
 EOF
 
     # Setup Istio mesh
