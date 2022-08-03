@@ -12,7 +12,42 @@ By default it assumes the repo has been cloned under the same parent directory o
 
 * The PEPs are using the images from `$HUB` and `$TAG`. Make sure they are set and reference a valid pushed image.
 
-## Running
+* For using the config method, you will need `yq` installed.
+
+## Running with a config
+
+To allow chaining multiple clusters with the same config, a number of changes have been made.
+
+You can now use config.yaml to configure your test parameters.
+
+An example:
+
+```yaml
+service_port_name: "http"
+params: "--concurrency 1 --output-format json --rps 200 --duration 60"
+final_result: "/tmp/results.txt"
+hub: "harbor.hawton.haus/daniel"
+tag: "ambient"
+linkerd: true
+clusters:
+- context: "kind-ambient"
+  k8s_type: "kind"
+  result_file: "/tmp/results-ambient-kind.csv"
+- context: "daniel_hawton@daniel-ambient-perf.us-west-2.eksctl.io"
+  k8s_type: "aws"
+  result_file: "/tmp/results-ambient-aws.csv"
+- context: "gke_solo-test-236622_us-west1-c_daniel-istio"
+  k8s_type: "gcp"
+  result_file: "/tmp/results-ambient-gke.csv"
+```
+
+Then just run:
+
+```sh
+./run_tests.sh
+```
+
+## Running run_perf_tests.sh directly
 
 The [run_perf_tests.sh](run_perf_tests.sh) script will use the K8s cluster in the current config context for running the performance tests in different configurations:
 * No mesh (pure K8s)
