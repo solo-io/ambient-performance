@@ -14,14 +14,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-NIGHTHAWK_PARAMS="--concurrency 1 --output-format json --rps 200 --duration 60"
-# NIGHTHAWK_PARAMS="--concurrency 1 --output-format json --max-requests-per-connection 1 --rps 200 --duration 60"
-RESULTS_FILE="perf_tests_results_tcp.csv"
-SERVICE_PORT_NAME="tcp-enforcment"
-
 DIR="$( cd "$( dirname "$0" )" && pwd )"
-RESULTS_FILE="$DIR/$RESULTS_FILE"
-AMBIENT_REPO_DIR=$DIR/../istio-sidecarless
+
+NIGHTHAWK_PARAMS=${NIGHTHAWK_PARAMS:-"--concurrency 1 --output-format json --rps 200 --duration 60"}
+# NIGHTHAWK_PARAMS="--concurrency 1 --output-format json --max-requests-per-connection 1 --rps 200 --duration 60"
+SERVICE_PORT_NAME=${SERVICE_PORT_NAME:-"tcp-enforcment"}
+AMBIENT_REPO_DIR=${AMBIENT_REPO_DIR:-"$DIR/../istio-sidecarless"}
+DATERUN=$(date +"%Y%m%d-%H%M")
+RESULTS_JSON=${RESULTS_JSON:-"/tmp/results-$DATERUN.json"}
+RESULTS_FILE=${RESULTS_FILE:-"$DIR/results/results-$DATERUN.csv"}
+if [[ ! -z "$CONTEXT" ]]; then
+  CONTEXT="--context $CONTEXT"
+fi
+
+if [[ ! -d "results" ]]; then
+  mkdir "results"
+fi
 
 RESULTS_NAMES=()
 RESULTS_P50=()
@@ -34,18 +42,26 @@ runPerfTest()
 {
     echo "Executing performance tests for: $1.."
     RESULTS_NAMES+=("$1")
-    eval kubectl exec deploy/nhclient -c nighthawk -- nighthawk_client "$NIGHTHAWK_PARAMS" http://nhserver:8080/ > "$DIR"/perf_test_results.json
-    RESULTS_P50+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.5).duration)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')");
-    RESULTS_P90+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.9).duration)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')");
-    RESULTS_P99+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.990625).duration)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')");
-    RESULTS_P999+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.9990234375).duration)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')");
-    RESULTS_P9999+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.99990234375).duration)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')");
-    RESULTS_MAX+=("$(jq -r '.results[].statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.max)"' "$DIR"/perf_test_results.json | sed 's/s//' | awk '{print $1*1000}')");
+    eval kubectl $CONTEXT exec deploy/nhclient -c nighthawk -- nighthawk_client "$NIGHTHAWK_PARAMS" http://nhserver:8080/ > "$RESULTS_JSON"
+    if [[ $? -ne 0 ]]; then
+        echo "Failed to execute nighthawk_client"
+        echo "More information can be found in $RESULTS_JSON"
+        cleanup_cluster
+        exit 1
+    fi
+    RESULTS_P50+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.5).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
+    RESULTS_P90+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.9).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
+    RESULTS_P99+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.990625).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
+    RESULTS_P999+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.9990234375).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
+    RESULTS_P9999+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.99990234375).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
+    RESULTS_MAX+=("$(jq -r '.results[].statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.max)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
+
+    rm "$RESULTS_JSON"
 }
 
 lockDownMutualTls() 
 {
-    kubectl apply -n istio-system -f - <<EOF
+    kubectl $CONTEXT apply -n istio-system -f - <<EOF
         apiVersion: security.istio.io/v1beta1
         kind: PeerAuthentication
         metadata:
@@ -58,9 +74,9 @@ EOF
 
 deployPerfTestWorkloads()
 {
-    sed "s/tcp-enforcment/$SERVICE_PORT_NAME/g" "$DIR"/perf-test.yaml | kubectl apply -f -
-    kubectl wait pods -n default -l app=nhclient --for condition=Ready --timeout=90s
-    kubectl wait pods -n default -l app=nhserver --for condition=Ready --timeout=90s
+    sed "s/tcp-enforcment/$SERVICE_PORT_NAME/g" "$DIR"/yaml/perf-test.yaml | kubectl $CONTEXT apply -f -
+    kubectl $CONTEXT wait pods -n default -l app=nhclient --for condition=Ready --timeout=90s
+    kubectl $CONTEXT wait pods -n default -l app=nhserver --for condition=Ready --timeout=90s
     sleep 5
 }
 
@@ -74,33 +90,110 @@ noMesh()
     runPerfTest "No Mesh"
 
     # Cleanup before next test
-    kubectl delete -f "$DIR"/perf-test.yaml
+    kubectl $CONTEXT delete -f "$DIR"/yaml/perf-test.yaml
 
     # Wait for them to be deleted
-    kubectl wait pods -n default -l app=nhclient --for=delete --timeout=90s
-    kubectl wait pods -n default -l app=nhserver --for=delete --timeout=90s
+    kubectl $CONTEXT wait pods -n default -l app=nhclient --for=delete --timeout=90s
+    kubectl $CONTEXT wait pods -n default -l app=nhserver --for=delete --timeout=90s
 }
 
 sidecars()
 {
     echo ""
 
+    cat <<EOF >/tmp/sidecarnohbone.yaml
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  namespace: istio-system
+spec:
+  meshConfig:
+    defaultConfig:
+      proxyMetadata:
+        ISTIO_META_ENABLE_HBONE: "true"
+EOF
+
     # Setup Istio mesh
-    go run istioctl/cmd/istioctl/main.go install -d manifests/ --set hub="$HUB" --set tag="$TAG" -y --set profile=default --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
+    go run istioctl/cmd/istioctl/main.go install $CONTEXT -d manifests/ --set hub="$HUB" --set tag="$TAG" -y --set profile=default -f /tmp/sidecarnohbone.yaml --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
+
+    rm /tmp/sidecarnohbone.yaml
+
     lockDownMutualTls
-    kubectl label namespace default istio-injection=enabled
+    kubectl $CONTEXT label namespace default istio-injection=enabled
     deployPerfTestWorkloads
 
     # Run performance test and write results to file
     runPerfTest "With Istio Sidecars"
 
     # Cleanup before next test
-    go run istioctl/cmd/istioctl/main.go x uninstall --purge -y
-    kubectl delete -f "$DIR"/perf-test.yaml
-    kubectl wait pods -n default -l app=nhclient --for=delete --timeout=90s
-    kubectl wait pods -n default -l app=nhserver --for=delete --timeout=90s
-    kubectl delete ns istio-system
-    kubectl label namespace default istio-injection-
+    go run istioctl/cmd/istioctl/main.go x uninstall --purge -y $CONTEXT
+    kubectl $CONTEXT delete -f "$DIR"/yaml/perf-test.yaml
+    kubectl $CONTEXT wait pods -n default -l app=nhclient --for=delete --timeout=90s
+    kubectl $CONTEXT wait pods -n default -l app=nhserver --for=delete --timeout=90s
+    kubectl $CONTEXT delete ns istio-system
+    kubectl $CONTEXT label namespace default istio-injection-
+}
+
+sidecarsWithHBONE()
+{
+    echo ""
+
+    # Setup Istio mesh
+    go run istioctl/cmd/istioctl/main.go install $CONTEXT -d manifests/ --set hub="$HUB" --set tag="$TAG" -y --set profile=default --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
+    lockDownMutualTls
+    kubectl $CONTEXT label namespace default istio-injection=enabled
+    deployPerfTestWorkloads
+
+    # Run performance test and write results to file
+    runPerfTest "With Istio Sidecars (HBONE)"
+
+    # Cleanup before next test
+    go run istioctl/cmd/istioctl/main.go x uninstall --purge -y $CONTEXT
+    kubectl $CONTEXT delete -f "$DIR"/yaml/perf-test.yaml
+    kubectl $CONTEXT wait pods -n default -l app=nhclient --for=delete --timeout=90s
+    kubectl $CONTEXT wait pods -n default -l app=nhserver --for=delete --timeout=90s
+    kubectl $CONTEXT delete ns istio-system
+    kubectl $CONTEXT label namespace default istio-injection-
+}
+
+linkerdTest()
+{
+    if [[ -z "$LINKERD" ]]; then
+        RESULTS_NAMES+=("Linkerd")
+        RESULTS_P50+=("Skipped")
+        RESULTS_P90+=("Skipped")
+        RESULTS_P99+=("Skipped")
+        RESULTS_P999+=("Skipped")
+        RESULTS_P9999+=("Skipped")
+        RESULTS_MAX+=("Skipped")
+        return 0
+    fi
+
+    echo ""
+    if [[ $K8S_TYPE == "aws" ]]; then
+        linkerd $CONTEXT install --set proxyInit.runAsRoot=true | kubectl $CONTEXT apply -f -
+    else
+        linkerd $CONTEXT install --set proxyInit.runAsRoot=true | kubectl $CONTEXT apply -f -
+    fi
+    linkerd $CONTEXT check
+
+    sed "s/tcp-enforcment/$SERVICE_PORT_NAME/g" "$DIR"/yaml/perf-test.yaml | linkerd $CONTEXT inject - | kubectl $CONTEXT apply -f -
+    sleep 3
+    kubectl $CONTEXT wait pods -n default -l app=nhclient --for condition=Ready --timeout=90s
+    kubectl $CONTEXT wait pods -n default -l app=nhserver --for condition=Ready --timeout=90s
+    sleep 5
+
+    runPerfTest "Linkerd"
+
+    # Cleanup before next test
+    kubectl $CONTEXT delete -f "$DIR"/yaml/perf-test.yaml
+
+    # Wait for them to be deleted
+    kubectl $CONTEXT wait pods -n default -l app=nhclient --for=delete --timeout=90s
+    kubectl $CONTEXT wait pods -n default -l app=nhserver --for=delete --timeout=90s
+
+    linkerd $CONTEXT uninstall | kubectl $CONTEXT delete -f -
+    sleep 15
 }
 
 ambientNoPEPs()
@@ -114,7 +207,7 @@ ambientNoPEPs()
     elif [ "${K8S_TYPE}" == gcp ]; then
         PROFILE="ambient-gke"
     fi
-    go run istioctl/cmd/istioctl/main.go install -d manifests/ --set hub="$HUB" --set tag="$TAG" -y --set profile=$PROFILE --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
+    go run istioctl/cmd/istioctl/main.go install $CONTEXT -d manifests/ --set hub="$HUB" --set tag="$TAG" -y --set profile=$PROFILE --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
 
     lockDownMutualTls
     deployPerfTestWorkloads
@@ -128,16 +221,21 @@ ambientWithPEPs()
     echo ""
 
     # Deploy PEP proxies (client and server)
-    envsubst < "$DIR"/server-proxy.yaml | kubectl apply -f -
-    envsubst < "$DIR"/client-proxy.yaml | kubectl apply -f -
-    kubectl wait pods -n default -l ambient-type=pep --for condition=Ready --timeout=90s
+    envsubst < "$DIR"/yaml/server-proxy.yaml | kubectl $CONTEXT apply -f -
+    envsubst < "$DIR"/yaml/client-proxy.yaml | kubectl $CONTEXT apply -f -
+    kubectl $CONTEXT wait pods -n default -l ambient-type=pep --for condition=Ready --timeout=120s
+    if [[ $? != "0" ]]; then
+        echo "Failed to deploy PEP proxies... exiting dirty for log review"
+        exit 1
+    fi
     sleep 10
+    kubectl $CONTEXT get pod -A
 
     # Run performance test and write results to file
     runPerfTest "Ambient (uProxies + PEPs)"
 
     # Clean up proxies
-    kubectl delete -f "$DIR"/server-proxy.yaml -f "$DIR"/client-proxy.yaml -f "$DIR"/perf-test.yaml
+    kubectl $CONTEXT delete -f "$DIR"/yaml/server-proxy.yaml -f "$DIR"/yaml/client-proxy.yaml -f "$DIR"/yaml/perf-test.yaml
 }
 
 writeResults()
@@ -166,22 +264,40 @@ writeResults()
 
     printf "\nMax," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_MAX[$i]}," >> "$RESULTS_FILE"; done
+
+    printf "\n" >> "$RESULTS_FILE"
+}
+
+cleanup_cluster() {
+    go run istioctl/cmd/istioctl/main.go x uninstall --purge -y $CONTEXT || true
+    kubectl $CONTEXT delete -f "$DIR"/yaml/perf-test.yaml -f "$DIR"/yaml/client-proxy.yaml -f "$DIR"/yaml/server-proxy.yaml || true
+    kubectl $CONTEXT delete ns istio-system || true
+    kubectl $CONTEXT label ns default istio-injection- || true
+    kubectl $CONTEXT label ns default istio.io/dataplane-mode- || true
+}
+
+trap_ctrlc() {
+    echo "CTRL+C received. Cleaning up cluster"
+    cleanup_cluster
+    echo "Exiting..."
+    exit 2
 }
 
 pushd "$AMBIENT_REPO_DIR" || exit
 
+trap "trap_ctrlc" 2
+
 noMesh
 sidecars
+sidecarsWithHBONE
+linkerdTest
 # Label namespace, as the CNI relies on this label
-kubectl label ns default istio.io/dataplane-mode=ambient --overwrite
+kubectl $CONTEXT label ns default istio.io/dataplane-mode=ambient --overwrite
 ambientNoPEPs
 ambientWithPEPs
 
 # Clean up cluster
-go run istioctl/cmd/istioctl/main.go x uninstall --purge -y
-kubectl delete ns istio-system || true
-kubectl label ns default istio-injection- || true
-kubectl label ns default istio.io/dataplane-mode- || true
+cleanup_cluster
 
 popd || exit
 

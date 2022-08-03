@@ -12,11 +12,47 @@ By default it assumes the repo has been cloned under the same parent directory o
 
 * The PEPs are using the images from `$HUB` and `$TAG`. Make sure they are set and reference a valid pushed image.
 
-## Running
+* For using the config method, you will need `yq` installed.
+
+## Running with a config
+
+To allow chaining multiple clusters with the same config, a number of changes have been made.
+
+You can now use config.yaml to configure your test parameters.
+
+An example:
+
+```yaml
+service_port_name: "http"
+params: "--concurrency 1 --output-format json --rps 200 --duration 60"
+final_result: "/tmp/results.txt"
+hub: "harbor.hawton.haus/daniel"
+tag: "ambient"
+linkerd: true
+clusters:
+- context: "kind-ambient"
+  k8s_type: "kind"
+  result_file: "/tmp/results-ambient-kind.csv"
+- context: "daniel_hawton@daniel-ambient-perf.us-west-2.eksctl.io"
+  k8s_type: "aws"
+  result_file: "/tmp/results-ambient-aws.csv"
+- context: "gke_solo-test-236622_us-west1-c_daniel-istio"
+  k8s_type: "gcp"
+  result_file: "/tmp/results-ambient-gke.csv"
+```
+
+Then just run:
+
+```sh
+./run_tests.sh
+```
+
+## Running run_perf_tests.sh directly
 
 The [run_perf_tests.sh](run_perf_tests.sh) script will use the K8s cluster in the current config context for running the performance tests in different configurations:
 * No mesh (pure K8s)
 * Istio Sidecars
+* Linkerd Proxy (only tested if LINKERD environment variable is defined, simplest way is `LINKERD=1`)
 * Ambient (only uProxies)
 * Ambient (uProxies and PEPs)
 
@@ -40,6 +76,14 @@ p90,1.20627,1.52237,2.02035,2.86694,
 p99,5.14918,5.61587,6.44147,21.0422,
 Max,31.6416,18.8078,16.1807,77.7257,
 ```
+
+You can convert the CSV portion of the results to a nice table with conv_results.sh:
+
+```sh
+./conv_results.txt
+```
+
+This will output the results in an ASCII table to stdout.
 
 ## Few Things To Notice
 * mTLS is enabled in the service mesh in the Istio/Ambient scenarios
