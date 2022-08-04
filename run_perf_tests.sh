@@ -40,6 +40,10 @@ RESULTS_P9999=()
 RESULTS_MAX=()
 runPerfTest()
 {
+
+    # let things settle down before we test.
+    sleep 10
+    echo ""
     echo "Executing performance tests for: $1.."
     RESULTS_NAMES+=("$1")
     eval kubectl $CONTEXT exec deploy/nhclient -c nighthawk -- nighthawk_client "$NIGHTHAWK_PARAMS" http://nhserver:8080/ > "$RESULTS_JSON"
@@ -54,7 +58,7 @@ runPerfTest()
     RESULTS_P99+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.990625).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
     RESULTS_P999+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.9990234375).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
     RESULTS_P9999+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.99990234375).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
-    RESULTS_MAX+=("$(jq -r '.results[].statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.max)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
+    RESULTS_MAX+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.max)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
 
     rm "$RESULTS_JSON"
 }
@@ -196,6 +200,13 @@ linkerdTest()
     sleep 15
 }
 
+prepAmbientTest() {
+    go run istioctl/cmd/istioctl/main.go install $CONTEXT -d manifests/ --set hub="$HUB" --set tag="$TAG" -y --set profile=$PROFILE --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
+
+    lockDownMutualTls
+    deployPerfTestWorkloads
+}
+
 ambientNoPEPs()
 {
     echo ""
@@ -207,11 +218,8 @@ ambientNoPEPs()
     elif [ "${K8S_TYPE}" == gcp ]; then
         PROFILE="ambient-gke"
     fi
-    go run istioctl/cmd/istioctl/main.go install $CONTEXT -d manifests/ --set hub="$HUB" --set tag="$TAG" -y --set profile=$PROFILE --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
 
-    lockDownMutualTls
-    deployPerfTestWorkloads
-
+    prepAmbientTest
     # Run performance test and write results to file
     runPerfTest "Ambient (only uProxies)"
 }
@@ -222,7 +230,7 @@ ambientWithPEPs()
 
     # Deploy PEP proxies (client and server)
     envsubst < "$DIR"/yaml/server-proxy.yaml | kubectl $CONTEXT apply -f -
-    envsubst < "$DIR"/yaml/client-proxy.yaml | kubectl $CONTEXT apply -f -
+#    envsubst < "$DIR"/yaml/client-proxy.yaml | kubectl $CONTEXT apply -f -
     kubectl $CONTEXT wait pods -n default -l ambient-type=pep --for condition=Ready --timeout=120s
     if [[ $? != "0" ]]; then
         echo "Failed to deploy PEP proxies... exiting dirty for log review"
@@ -230,6 +238,8 @@ ambientWithPEPs()
     fi
     sleep 10
     kubectl $CONTEXT get pod -A
+
+    prepAmbientTest
 
     # Run performance test and write results to file
     runPerfTest "Ambient (uProxies + PEPs)"
