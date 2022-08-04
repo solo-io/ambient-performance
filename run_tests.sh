@@ -13,6 +13,8 @@ if [[ -z "$PARAMS" ]]; then
     echo "No params specified in config.yaml"
     exit 1
 fi
+CONTEXT=`yq '.context' "$config_file"`
+K8S_TYPE=`yq '.k8s_type' "$config_file"`
 
 FINAL_RESULT=`yq '.final_result' "$config_file"`
 if [[ -z "$FINAL_RESULT" ]]; then
@@ -37,26 +39,43 @@ fi
 
 cat <<EOF > "$FINAL_RESULT"
 Test run: $(date)
-Nighthawk client parameters: $PARAMS
-Protocol: $protocol
 
 EOF
 
 cat $config_file | yq -o json | jq -c '.clusters[]' | while read i
 do
-    CONTEXT=`echo $i | jq -r '.context'`
-    K8S_TYPE=`echo $i | jq -r '.k8s_type'`
-    RESULT_FILE=`echo $i | jq -r '.result_file'`
+    # jq -er '.context | values
+    # -e - return error if output is null
+    # '| values' doesn't output null
+    # see https://github.com/stedolan/jq/issues/354#issuecomment-478771540
+    CONTEXT_CLUSTER=$(echo $i | jq -er '.context | values' || echo $CONTEXT)
+    K8S_TYPE_CLUSTER=$(echo $i | jq -er '.k8s_type | values' || echo $K8S_TYPE)
+    SERVICE_PORT_NAME_CLUSTER=$(echo $i | jq -er '.service_port_name | values' || echo $SERVICE_PORT_NAME)
+    PARAMS_CLUSTER=$(echo $i | jq -er '.params | values' || echo $PARAMS)
 
-    LINKERD=$LINKERD SERVICE_PORT_NAME="$SERVICE_PORT_NAME" NIGHTHAWK_PARAMS="$PARAMS" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT" K8S_TYPE="$K8S_TYPE" HUB="$HUB" TAG="$TAG" ./run_perf_tests.sh
+    RESULT_FILE=`echo $i | jq -r '.result_file | values'`
+    if [[ -z "$RESULT_FILE" ]]; then
+        RESULT_FILE="/tmp/results.txt"
+    fi
 
-    if [[ $? -ne 0 ]]; then
-        echo "Failed to run tests for $CONTEXT"
-        exit 1
+    echo "Running tests for cluster: $CONTEXT_CLUSTER"
+    echo LINKERD=$LINKERD SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" NIGHTHAWK_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" ./run_perf_tests.sh
+    LINKERD=$LINKERD SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" NIGHTHAWK_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" ./run_perf_tests.sh
+    
+    EXIT_CODE=$?
+    if [[ $EXIT_CODE -ne 0 ]]; then
+        # 2 is ctrl+c exit
+        if [[ $EXIT_CODE -eq 2 ]]; then
+            exit 2
+        fi
+        echo "Failed to run tests for $CONTEXT with protocol: $protocol, parameters: $PARAMS_CLUSTER" | tee -a "$FINAL_RESULT"
+        continue
     fi
 
     sleep 5 # Give time for file to be written to disk
 
-    echo "------------- $CONTEXT -------------" | tee -a "$FINAL_RESULT"
+    echo "Nighthawk client parameters: $PARAMS_CLUSTER" | tee -a "$FINAL_RESULT"
+    echo "Protocol: $protocol ($SERVICE_PORT_NAME_CLUSTER)" | tee -a "$FINAL_RESULT"
+    echo "------------- $CONTEXT_CLUSTER -------------" | tee -a "$FINAL_RESULT"
     RESULTS_FILE="$RESULT_FILE" ./conv_results.sh | tee -a "$FINAL_RESULT"
 done
