@@ -98,7 +98,7 @@ installIstio()
     fi
     kubectl $CONTEXT create ns istio-system
     kubectl $CONTEXT apply -n istio-system -f $IMAGE_PULL_SECRET
-    installIstio $@ $secret
+    go run istioctl/cmd/istioctl/main.go install $CONTEXT -d manifests/ --set hub="$HUB" --set tag="$TAG" -y $@ $secret
     if [[ $? != "0" ]]; then
         echo "Failed to install Istio"
         cleanup_cluster
