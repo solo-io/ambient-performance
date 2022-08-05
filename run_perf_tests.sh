@@ -24,11 +24,25 @@ DATERUN=$(date +"%Y%m%d-%H%M")
 RESULTS_JSON=${RESULTS_JSON:-"/tmp/results-$DATERUN.json"}
 RESULTS_FILE=${RESULTS_FILE:-"$DIR/results/results-$DATERUN.csv"}
 if [[ ! -z "$CONTEXT" ]]; then
-  CONTEXT="--context $CONTEXT"
+    CONTEXT="--context $CONTEXT"
 fi
 
 if [[ ! -d "results" ]]; then
-  mkdir "results"
+    mkdir "results"
+fi
+IMAGE_PULL_SECRET_NAME=""
+if [[ ! -z "$IMAGE_PULL_SECRET" ]]; then
+    if [[ -f "$IMAGE_PULL_SECRET" ]]; then
+        IMAGE_PULL_SECRET_NAME=`cat "$IMAGE_PULL_SECRET" | yq '.metadata.name'`
+        if [[ $? -ne 0 ]]; then
+            echo "Error: could not parse image pull secret name from $IMAGE_PULL_SECRET"
+            exit 1
+        fi
+        IMAGE_PULL_SECRET_NAME=`echo $IMAGE_PULL_SECRET_NAME | tr -d '"'`
+    else
+        echo "Image pull secret should be a file: '$IMAGE_PULL_SECRET'"
+        exit 1
+    fi
 fi
 
 RESULTS_NAMES=()
@@ -76,6 +90,22 @@ lockDownMutualTls()
 EOF
 }
 
+installIstio()
+{
+    secret=""
+    if [[ "$IMAGE_PULL_SECRET_NAME" != "" ]]; then
+      secret="--set values.global.imagePullSecrets=$IMAGE_PULL_SECRET_NAME "
+    fi
+    kubectl $CONTEXT create ns istio-system
+    kubectl $CONTEXT apply -n istio-system -f $IMAGE_PULL_SECRET
+    installIstio $@ $secret
+    if [[ $? != "0" ]]; then
+        echo "Failed to install Istio"
+        cleanup_cluster
+        exit 1
+    fi
+}
+
 deployPerfTestWorkloads()
 {
     sed "s/tcp-enforcment/$SERVICE_PORT_NAME/g" "$DIR"/yaml/perf-test.yaml | kubectl $CONTEXT apply -f -
@@ -118,7 +148,7 @@ spec:
 EOF
 
     # Setup Istio mesh
-    go run istioctl/cmd/istioctl/main.go install $CONTEXT -d manifests/ --set hub="$HUB" --set tag="$TAG" -y --set profile=default -f /tmp/sidecarnohbone.yaml --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
+    installIstio --set profile=default -f /tmp/sidecarnohbone.yaml --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
 
     rm /tmp/sidecarnohbone.yaml
 
@@ -142,8 +172,27 @@ sidecarsWithHBONE()
 {
     echo ""
 
+    cat <<EOF >/tmp/sidecarhbone.yaml
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  namespace: istio-system
+spec:
+  meshConfig:
+    defaultConfig:
+      proxyMetadata:
+        ISTIO_META_ENABLE_HBONE: "true"
+EOF
+
     # Setup Istio mesh
-    go run istioctl/cmd/istioctl/main.go install $CONTEXT -d manifests/ --set hub="$HUB" --set tag="$TAG" -y --set profile=default --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
+    installIstio -f /tmp/sidecarhbone.yaml --set profile=default --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
+    if [[ $? != "0" ]]; then
+        echo "Failed to install istio"
+        exit 1
+    fi
+
+    rm /tmp/sidecarhbone.yaml
+
     lockDownMutualTls
     kubectl $CONTEXT label namespace default istio-injection=enabled
     deployPerfTestWorkloads
@@ -201,7 +250,12 @@ linkerdTest()
 }
 
 prepAmbientTest() {
-    go run istioctl/cmd/istioctl/main.go install $CONTEXT -d manifests/ --set hub="$HUB" --set tag="$TAG" -y --set profile=$PROFILE --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
+    installIstio --set profile=$PROFILE --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.defaultHttpRetryPolicy.attempts=0 --set values.global.imagePullPolicy=Always
+
+    if [[ $? != "0" ]]; then
+        echo "Failed to install istio"
+        exit 1
+    fi
 
     lockDownMutualTls
     deployPerfTestWorkloads
@@ -297,10 +351,19 @@ pushd "$AMBIENT_REPO_DIR" || exit
 
 trap "trap_ctrlc" 2
 
+# Apply image pull secret, if set, to kube-system and default, we handle istio's ns during install
+# This is useful for our GAR-stored images being deployed to an EKS cluster
+if [[ ! -z "$IMAGE_PULL_SECRET" ]]; then
+    kubectl $CONTEXT apply -n kube-system -f $IMAGE_PULL_SECRET
+    kubectl $CONTEXT apply -n default -f $IMAGE_PULL_SECRET
+fi
+
 noMesh
 sidecars
 sidecarsWithHBONE
-linkerdTest
+# Linkerd test removed as I do not know enough about it to ensure the configuration is comparable to sidecars
+# for compariable and fair testing.
+#linkerdTest
 # Label namespace, as the CNI relies on this label
 kubectl $CONTEXT label ns default istio.io/dataplane-mode=ambient --overwrite
 ambientNoPEPs
