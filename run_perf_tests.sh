@@ -94,7 +94,16 @@ installIstio()
 {
     secret=""
     if [[ "$IMAGE_PULL_SECRET_NAME" != "" ]]; then
-      secret="--set values.global.imagePullSecrets=$IMAGE_PULL_SECRET_NAME "
+        cat <<EOF >/tmp/imagepullsecrets.yaml
+apiVersion: install.istio.io/v1alpha1
+kind: ImagePullSecret
+spec:
+  values:
+    global:
+      imagePullSecrets:
+        - $IMAGE_PULL_SECRET_NAME
+EOF
+      secret="-f /tmp/imagepullsecrets.yaml "
     fi
     kubectl $CONTEXT create ns istio-system
     kubectl $CONTEXT apply -n istio-system -f $IMAGE_PULL_SECRET
@@ -103,6 +112,9 @@ installIstio()
         echo "Failed to install Istio"
         cleanup_cluster
         exit 1
+    fi
+    if [[ "$IMAGE_PULL_SECRET_NAME" != "" ]]; then
+        rm /tmp/imagepullsecrets.yaml
     fi
 }
 
