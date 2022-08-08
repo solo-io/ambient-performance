@@ -407,23 +407,21 @@ EOF
     fi
 
     log "Generating PEP deployment"
-    touch $TMPDIR/ips.yaml
     if [[ ! -z "$IMAGE_PULL_SECRET_NAME" ]]; then
-        cat <<EOF >$TMPDIR/ips.yaml
+        cat <<EOF >>$TMP/pep-prep.yaml
+`envsubst < "$DIR/yaml/server-proxy.yaml"`
+---
 spec:
   template:
     spec:
       imagePullSecrets:
       - name: $IMAGE_PULL_SECRET_NAME
 EOF
+        cat $TMPDIR/pep-prep.yaml | yq eval-all '. as $item ireduce ({}; . * $item)' > $TMPDIR/pep.yaml
+    else
+        envsubst < "$DIR/yaml/server-proxy.yaml" >$TMPDIR/pep.yaml
     fi
 
-    cat <<EOF >$TMPDIR/pep-prep.yaml
-`envsubst < "$DIR/yaml/server-proxy.yaml"`
----
-`cat $TMPDIR/ips.yaml`
-EOF
-    cat $TMPDIR/pep-prep.yaml | yq eval-all '. as $item ireduce ({}; . * $item)' > $TMPDIR/pep.yaml
     kctl apply -n $TESTING_NAMESPACE -f $TMPDIR/pep.yaml
     rm $TMPDIR/pep.yaml $TMPDIR/ips.yaml $TMPDIR/pep-prep.yaml || true
 
