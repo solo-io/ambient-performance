@@ -55,12 +55,34 @@ TESTING_NAMESPACE="test-$DATERUN"
 RESULTS_NAMES=()
 RESULTS_P50=()
 RESULTS_P90=()
+RESULTS_P95=()
 RESULTS_P99=()
 RESULTS_P999=()
 RESULTS_P9999=()
+RESULTS_MEAN=()
+RESULTS_STDDEV=()
 RESULTS_MAX=()
+RESULTS_MIN=()
 runPerfTest()
 {
+
+    echo ""
+    if [[ "$2" == "skip" ]]; then
+        RESULTS_NAMES+=("$1")
+        RESULTS_P50+=("Skipped")
+        RESULTS_P90+=("Skipped")
+        RESULTS_P95+=("Skipped")
+        RESULTS_P99+=("Skipped")
+        RESULTS_P999+=("Skipped")
+        RESULTS_P9999+=("Skipped")
+        RESULTS_MEAN+=("Skipped")
+        RESULTS_STDDEV+=("Skipped")
+        RESULTS_MAX+=("Skipped")
+        RESULTS_MIN+=("Skipped")
+        return 0
+    fi
+
+
     # let things settle down before we test.
     sleep 10
     echo ""
@@ -75,10 +97,14 @@ runPerfTest()
 
     RESULTS_P50+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.5).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
     RESULTS_P90+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.9).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
+    RESULTS_P95+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.95).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
     RESULTS_P99+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.990625).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
     RESULTS_P999+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.9990234375).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
     RESULTS_P9999+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.99990234375).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
+    RESULTS_MEAN+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.mean)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
+    RESULTS_STDDEV+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.pstdev)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
     RESULTS_MAX+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.max)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
+    RESULTS_MIN+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.min)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
 
     rm "$RESULTS_JSON"
 }
@@ -139,7 +165,7 @@ noMesh()
     deployPerfTestWorkloads
 
     # Run performance test and write results to file
-    runPerfTest "No Mesh"
+    runPerfTest "No Mesh" $1
 
     # Cleanup before next test
     kubectl $CONTEXT delete -n $TESTING_NAMESPACE -f "$DIR"/yaml/perf-test.yaml
@@ -175,7 +201,7 @@ EOF
     deployPerfTestWorkloads
 
     # Run performance test and write results to file
-    runPerfTest "With Istio Sidecars"
+    runPerfTest "With Istio Sidecars" $1
 
     # Cleanup before next test
     go run istioctl/cmd/istioctl/main.go x uninstall --purge -y $CONTEXT
@@ -216,7 +242,7 @@ EOF
     deployPerfTestWorkloads
 
     # Run performance test and write results to file
-    runPerfTest "With Istio Sidecars (HBONE)"
+    runPerfTest "With Istio Sidecars (HBONE)" "$1"
 
     # Cleanup before next test
     go run istioctl/cmd/istioctl/main.go x uninstall --purge -y $CONTEXT
@@ -256,7 +282,7 @@ ambientNoPEPs()
     kubectl get pod -A
 
     # Run performance test and write results to file
-    runPerfTest "Ambient (only uProxies)"
+    runPerfTest "Ambient (only uProxies)" $1
 }
 
 ambientWithPEPs()
@@ -303,7 +329,7 @@ EOF
 
 
     # Run performance test and write results to file
-    runPerfTest "Ambient (uProxies + PEPs)"
+    runPerfTest "Ambient (uProxies + PEPs)" $1
 
     # Clean up proxies
     kubectl $CONTEXT delete -n $TESTING_NAMESPACE -f "$DIR"/yaml/server-proxy.yaml -f "$DIR"/yaml/client-proxy.yaml -f "$DIR"/yaml/perf-test.yaml
@@ -324,6 +350,9 @@ writeResults()
     printf "\np90," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_P90[$i]}," >> "$RESULTS_FILE"; done
 
+    printf "\np95," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_P95[$i]}," >> "$RESULTS_FILE"; done
+
     printf "\np99," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_P99[$i]}," >> "$RESULTS_FILE"; done
 
@@ -333,8 +362,14 @@ writeResults()
     printf "\np99.99," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_P9999[$i]}," >> "$RESULTS_FILE"; done
 
+    printf "\nMean," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_MEAN[$i]}," >> "$RESULTS_FILE"; done
+    printf "\nStddev," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_STDDEV[$i]}," >> "$RESULTS_FILE"; done
     printf "\nMax," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_MAX[$i]}," >> "$RESULTS_FILE"; done
+    printf "\nMin," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_MIN[$i]}," >> "$RESULTS_FILE"; done
 
     printf "\n" >> "$RESULTS_FILE"
 }

@@ -7,4 +7,4 @@ while IFS=, read -r perc nomesh sidecar sidecarhbone ambient pep
 do
 	printf "| %-6s | %-8s | %-10s | %-16s | %-16s | %-16s |\n" \
 	    "$perc" "$nomesh" "$sidecar" "$sidecarhbone" "$ambient" "$pep"
-done < <(tail -n 6 "$RESULTS_FILE")
+done < <(tail -n 10 "$RESULTS_FILE")

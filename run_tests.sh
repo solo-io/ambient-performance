@@ -17,6 +17,11 @@ CONTEXT=`yq '.context' "$config_file"`
 K8S_TYPE=`yq '.k8s_type' "$config_file"`
 IMAGE_PULL_SECRET=`yq '.image_pull_secret' "$config_file"`
 
+# check if IMAGE_PULL_SECRETis null and zero it if so
+if [[ "$IMAGE_PULL_SECRET" == "null" ]]; then
+    IMAGE_PULL_SECRET=""
+fi
+
 CONTINUE_ON_FAIL=`yq '.continue_on_fail' "$config_file"`
 if [[ -z "$CONTINUE_ON_FAIL" ]]; then
     CONTINUE_ON_FAIL="yes"
@@ -29,12 +34,6 @@ fi
 
 HUB=`yq '.hub' "$config_file"`
 TAG=`yq '.tag' "$config_file"`
-
-if [[ "$SERVICE_PORT_NAME" == "http" ]]; then
-    protocol="HTTP (w/ mTLS Layer 7 parsing)"
-else
-    protocol="HTTP (w/o mTLS Layer 7 parsing)"
-fi
 
 cat <<EOF > "$FINAL_RESULT"
 Test run: $(date)
@@ -51,25 +50,27 @@ log() {
     echo "[$d] $*" | tee -a "log"
 }
 
-cat $config_file | yq -o json | jq -c '.clusters[]' | while read i
-do
+NUM_CLUSTERS=`yq '.clusters | length' "$config_file"`
+for i in $(seq 0 $((${NUM_CLUSTERS} - 1))); do
+
     # jq -er '.context | values
     # -e - return error if output is null
     # '| values' doesn't output null
     # see https://github.com/stedolan/jq/issues/354#issuecomment-478771540
-    CONTEXT_CLUSTER=$(echo $i | jq -er '.context | values' || echo $CONTEXT)
-    K8S_TYPE_CLUSTER=$(echo $i | jq -er '.k8s_type | values' || echo $K8S_TYPE)
-    SERVICE_PORT_NAME_CLUSTER=$(echo $i | jq -er '.service_port_name | values' || echo $SERVICE_PORT_NAME)
-    PARAMS_CLUSTER=$(echo $i | jq -er '.params | values' || echo $PARAMS)
-    IMAGE_PULL_SECRET=$(echo $i | jq -er '.image_pull_secret | values' || echo $IMAGE_PULL_SECRET)
+    CONTEXT_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].context | values' || echo $CONTEXT)
+    K8S_TYPE_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].k8s_type | values' || echo $K8S_TYPE)
+    SERVICE_PORT_NAME_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].service_port_name | values' || echo $SERVICE_PORT_NAME)
+    PARAMS_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].params | values' || echo $PARAMS)
+    IMAGE_PULL_SECRET=$(yq -o json "$config_file" | jq -er '.clusters['$i'].image_pull_secret | values' || echo $IMAGE_PULL_SECRET)
 
-    if [[ "$IMAGE_PULL_SECRET" == "null" ]]; then
-        IMAGE_PULL_SECRET=""
-    fi
-
-    RESULT_FILE=`echo $i | jq -r '.result_file | values'`
+    RESULT_FILE=$(yq -o json "$config_file" | jq -r '.clusters['$i'].result_file | values')
     if [[ -z "$RESULT_FILE" ]]; then
         RESULT_FILE="/tmp/results.txt"
+    fi
+    if [[ "$SERVICE_PORT_NAME_CLUSTER" == "http" ]]; then
+        protocol="HTTP (w/ mTLS Layer 7 parsing)"
+    else
+        protocol="HTTP (w/o mTLS Layer 7 parsing)"
     fi
 
     while true; do

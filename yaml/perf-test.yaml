@@ -38,7 +38,7 @@ data:
               http_filters:
               - name: dynamic-delay
                 typed_config:
-                  "@type": type.googleapis.com/nighthawk.server.ResponseOptions
+                  "@type": type.googleapis.com/nighthawk.server.DynamicDelayConfiguration
 
               - name: test-server
                 typed_config:
