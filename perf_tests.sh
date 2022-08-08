@@ -34,10 +34,14 @@ fi
 RESULTS_NAMES=()
 RESULTS_P50=()
 RESULTS_P90=()
+RESULTS_P95=()
 RESULTS_P99=()
 RESULTS_P999=()
 RESULTS_P9999=()
+RESULTS_MEAN=()
+RESULTS_STDDEV=()
 RESULTS_MAX=()
+RESULTS_MIN=()
 
 if [[ ! -d "results" ]]; then
     mkdir "results"
@@ -58,6 +62,23 @@ log() {
 
 runPerfTest() {
     test_name=$1
+
+    if [[ "$2" == "skip" ]]; then
+        log "Skipping test: $test_name"
+        RESULTS_NAMES+=("$test_name")
+        RESULTS_P50+=("Skipped")
+        RESULTS_P90+=("Skipped")
+        RESULTS_P95+=("Skipped")
+        RESULTS_P99+=("Skipped")
+        RESULTS_P999+=("Skipped")
+        RESULTS_P9999+=("Skipped")
+        RESULTS_MEAN+=("Skipped")
+        RESULTS_STDDEV+=("Skipped")
+        RESULTS_MAX+=("Skipped")
+        RESULTS_MIN+=("Skipped")
+        return 0
+    fi
+
     log "Executing performance tests for: $test_name..."
     eval kctl exec -n $TESTING_NAMESPACE deploy/nhclient -c nighthawk -- \
         nighthawk_client "$NIGHTHAWK_PARAMS" http://nhserver:8080/ > "$RESULTS_JSON"
@@ -69,10 +90,14 @@ runPerfTest() {
     RESULTS_NAMES+=("$test_name")
     RESULTS_P50+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.5).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
     RESULTS_P90+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.9).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
+    RESULTS_P95+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.95).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
     RESULTS_P99+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.990625).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
     RESULTS_P999+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.9990234375).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
     RESULTS_P9999+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.99990234375).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
+    RESULTS_MEAN+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.mean)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
+    RESULTS_STDDEV+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.pstdev)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
     RESULTS_MAX+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.max)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
+    RESULTS_MIN+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.min)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
 
     rm "$RESULTS_JSON"
 }
@@ -163,6 +188,9 @@ writeResults() {
     printf "\np90," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_P90[$i]}," >> "$RESULTS_FILE"; done
 
+    printf "\np95," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_P95[$i]}," >> "$RESULTS_FILE"; done
+
     printf "\np99," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_P99[$i]}," >> "$RESULTS_FILE"; done
 
@@ -172,8 +200,15 @@ writeResults() {
     printf "\np99.99," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_P9999[$i]}," >> "$RESULTS_FILE"; done
 
+    printf "\nMean," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_MEAN[$i]}," >> "$RESULTS_FILE"; done
+    printf "\nStddev," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_STDDEV[$i]}," >> "$RESULTS_FILE"; done
+
     printf "\nMax," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_MAX[$i]}," >> "$RESULTS_FILE"; done
+    printf "\nMin," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_MIN[$i]}," >> "$RESULTS_FILE"; done
 
     printf "\n" >> "$RESULTS_FILE"
 }
