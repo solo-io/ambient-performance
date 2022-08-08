@@ -8,7 +8,6 @@ metadata:
     gateway.istio.io/managed: istio.io-mesh-controller
     istio.io/gateway-name: gateway-nhclient
   name: nhclient-proxy
-  namespace: default
 spec:
   progressDeadlineSeconds: 600
   replicas: 1

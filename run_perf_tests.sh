@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # Copyright Istio Authors
 #
@@ -13,6 +13,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+####################################################################################################
+# This has been replaced by perf_tests.sh
+####################################################################################################
+
+set -x
 
 DIR="$( cd "$( dirname "$0" )" && pwd )"
 
@@ -44,6 +50,7 @@ if [[ ! -z "$IMAGE_PULL_SECRET" ]]; then
         exit 1
     fi
 fi
+TESTING_NAMESPACE="test-$DATERUN"
 
 RESULTS_NAMES=()
 RESULTS_P50=()
@@ -54,19 +61,18 @@ RESULTS_P9999=()
 RESULTS_MAX=()
 runPerfTest()
 {
-
     # let things settle down before we test.
     sleep 10
     echo ""
     echo "Executing performance tests for: $1.."
     RESULTS_NAMES+=("$1")
-    eval kubectl $CONTEXT exec deploy/nhclient -c nighthawk -- nighthawk_client "$NIGHTHAWK_PARAMS" http://nhserver:8080/ > "$RESULTS_JSON"
+    eval kubectl $CONTEXT exec -n $TESTING_NAMESPACE deploy/nhclient -c nighthawk -- nighthawk_client "$NIGHTHAWK_PARAMS" http://nhserver:8080/ > "$RESULTS_JSON"
     if [[ $? -ne 0 ]]; then
-        echo "Failed to execute nighthawk_client"
-        echo "More information can be found in $RESULTS_JSON"
-        cleanup_cluster
+        echo "Test failed."
+        #cleanup_cluster
         exit 1
     fi
+
     RESULTS_P50+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.5).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
     RESULTS_P90+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.9).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
     RESULTS_P99+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.percentiles[]|select(.percentile == 0.990625).duration)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
@@ -96,7 +102,7 @@ installIstio()
     if [[ "$IMAGE_PULL_SECRET_NAME" != "" ]]; then
         cat <<EOF >/tmp/imagepullsecrets.yaml
 apiVersion: install.istio.io/v1alpha1
-kind: ImagePullSecret
+kind: IstioOperator
 spec:
   values:
     global:
@@ -120,9 +126,9 @@ EOF
 
 deployPerfTestWorkloads()
 {
-    sed "s/tcp-enforcment/$SERVICE_PORT_NAME/g" "$DIR"/yaml/perf-test.yaml | kubectl $CONTEXT apply -f -
-    kubectl $CONTEXT wait pods -n default -l app=nhclient --for condition=Ready --timeout=90s
-    kubectl $CONTEXT wait pods -n default -l app=nhserver --for condition=Ready --timeout=90s
+    sed "s/tcp-enforcment/$SERVICE_PORT_NAME/g" "$DIR"/yaml/perf-test.yaml | kubectl $CONTEXT -n $TESTING_NAMESPACE apply -f -
+    kubectl $CONTEXT wait pods -n $TESTING_NAMESPACE -l app=nhclient --for condition=Ready --timeout=90s
+    kubectl $CONTEXT wait pods -n $TESTING_NAMESPACE -l app=nhserver --for condition=Ready --timeout=90s
     sleep 5
 }
 
@@ -136,11 +142,11 @@ noMesh()
     runPerfTest "No Mesh"
 
     # Cleanup before next test
-    kubectl $CONTEXT delete -f "$DIR"/yaml/perf-test.yaml
+    kubectl $CONTEXT delete -n $TESTING_NAMESPACE -f "$DIR"/yaml/perf-test.yaml
 
     # Wait for them to be deleted
-    kubectl $CONTEXT wait pods -n default -l app=nhclient --for=delete --timeout=90s
-    kubectl $CONTEXT wait pods -n default -l app=nhserver --for=delete --timeout=90s
+    kubectl $CONTEXT wait pods -n $TESTING_NAMESPACE -l app=nhclient --for=delete --timeout=90s
+    kubectl $CONTEXT wait pods -n $TESTING_NAMESPACE -l app=nhserver --for=delete --timeout=90s
 }
 
 sidecars()
@@ -165,7 +171,7 @@ EOF
     rm /tmp/sidecarnohbone.yaml
 
     lockDownMutualTls
-    kubectl $CONTEXT label namespace default istio-injection=enabled
+    kubectl $CONTEXT label namespace $TESTING_NAMESPACE istio-injection=enabled
     deployPerfTestWorkloads
 
     # Run performance test and write results to file
@@ -173,11 +179,11 @@ EOF
 
     # Cleanup before next test
     go run istioctl/cmd/istioctl/main.go x uninstall --purge -y $CONTEXT
-    kubectl $CONTEXT delete -f "$DIR"/yaml/perf-test.yaml
-    kubectl $CONTEXT wait pods -n default -l app=nhclient --for=delete --timeout=90s
-    kubectl $CONTEXT wait pods -n default -l app=nhserver --for=delete --timeout=90s
+    kubectl $CONTEXT delete -n $TESTING_NAMESPACE -f "$DIR"/yaml/perf-test.yaml
+    kubectl $CONTEXT wait pods -n $TESTING_NAMESPACE -l app=nhclient --for=delete --timeout=90s
+    kubectl $CONTEXT wait pods -n $TESTING_NAMESPACE -l app=nhserver --for=delete --timeout=90s
     kubectl $CONTEXT delete ns istio-system
-    kubectl $CONTEXT label namespace default istio-injection-
+    kubectl $CONTEXT label namespace $TESTING_NAMESPACE istio-injection-
 }
 
 sidecarsWithHBONE()
@@ -206,7 +212,7 @@ EOF
     rm /tmp/sidecarhbone.yaml
 
     lockDownMutualTls
-    kubectl $CONTEXT label namespace default istio-injection=enabled
+    kubectl $CONTEXT label namespace $TESTING_NAMESPACE istio-injection=enabled
     deployPerfTestWorkloads
 
     # Run performance test and write results to file
@@ -214,51 +220,11 @@ EOF
 
     # Cleanup before next test
     go run istioctl/cmd/istioctl/main.go x uninstall --purge -y $CONTEXT
-    kubectl $CONTEXT delete -f "$DIR"/yaml/perf-test.yaml
-    kubectl $CONTEXT wait pods -n default -l app=nhclient --for=delete --timeout=90s
-    kubectl $CONTEXT wait pods -n default -l app=nhserver --for=delete --timeout=90s
+    kubectl $CONTEXT delete -n $TESTING_NAMESPACE -f "$DIR"/yaml/perf-test.yaml
+    kubectl $CONTEXT wait pods -n $TESTING_NAMESPACE -l app=nhclient --for=delete --timeout=90s
+    kubectl $CONTEXT wait pods -n $TESTING_NAMESPACE -l app=nhserver --for=delete --timeout=90s
     kubectl $CONTEXT delete ns istio-system
-    kubectl $CONTEXT label namespace default istio-injection-
-}
-
-linkerdTest()
-{
-    if [[ -z "$LINKERD" ]]; then
-        RESULTS_NAMES+=("Linkerd")
-        RESULTS_P50+=("Skipped")
-        RESULTS_P90+=("Skipped")
-        RESULTS_P99+=("Skipped")
-        RESULTS_P999+=("Skipped")
-        RESULTS_P9999+=("Skipped")
-        RESULTS_MAX+=("Skipped")
-        return 0
-    fi
-
-    echo ""
-    if [[ $K8S_TYPE == "aws" ]]; then
-        linkerd $CONTEXT install --set proxyInit.runAsRoot=true | kubectl $CONTEXT apply -f -
-    else
-        linkerd $CONTEXT install --set proxyInit.runAsRoot=true | kubectl $CONTEXT apply -f -
-    fi
-    linkerd $CONTEXT check
-
-    sed "s/tcp-enforcment/$SERVICE_PORT_NAME/g" "$DIR"/yaml/perf-test.yaml | linkerd $CONTEXT inject - | kubectl $CONTEXT apply -f -
-    sleep 3
-    kubectl $CONTEXT wait pods -n default -l app=nhclient --for condition=Ready --timeout=90s
-    kubectl $CONTEXT wait pods -n default -l app=nhserver --for condition=Ready --timeout=90s
-    sleep 5
-
-    runPerfTest "Linkerd"
-
-    # Cleanup before next test
-    kubectl $CONTEXT delete -f "$DIR"/yaml/perf-test.yaml
-
-    # Wait for them to be deleted
-    kubectl $CONTEXT wait pods -n default -l app=nhclient --for=delete --timeout=90s
-    kubectl $CONTEXT wait pods -n default -l app=nhserver --for=delete --timeout=90s
-
-    linkerd $CONTEXT uninstall | kubectl $CONTEXT delete -f -
-    sleep 15
+    kubectl $CONTEXT label namespace $TESTING_NAMESPACE istio-injection-
 }
 
 prepAmbientTest() {
@@ -286,6 +252,9 @@ ambientNoPEPs()
     fi
 
     prepAmbientTest
+
+    kubectl get pod -A
+
     # Run performance test and write results to file
     runPerfTest "Ambient (only uProxies)"
 }
@@ -294,24 +263,50 @@ ambientWithPEPs()
 {
     echo ""
 
+    prepAmbientTest
+
+    touch /tmp/imagepullsecrets.yaml
+    if [[ ! -z "$IMAGE_PULL_SECRET_NAME" ]]; then
+        cat <<EOF >/tmp/imagepullsecrets.yaml
+spec:
+  template:
+    spec:
+      imagePullSecrets:
+      - name: ${IMAGE_PULL_SECRET_NAME}
+EOF
+    fi 
+    set -x
     # Deploy PEP proxies (client and server)
-    envsubst < "$DIR"/yaml/server-proxy.yaml | kubectl $CONTEXT apply -f -
-#    envsubst < "$DIR"/yaml/client-proxy.yaml | kubectl $CONTEXT apply -f -
-    kubectl $CONTEXT wait pods -n default -l ambient-type=pep --for condition=Ready --timeout=120s
+    # This shouldn't be necessary, but yq seems to break here if we pass files as an argument in this script... why??
+    cat <<EOF >/tmp/pep-prep.yaml
+`envsubst < "$DIR"/yaml/server-proxy.yaml`
+---
+`cat "/tmp/imagepullsecrets.yaml"`
+EOF
+    cat /tmp/pep-prep.yaml | yq eval-all '. as $item ireduce ({}; . * $item)' > /tmp/pep.yaml
+    if [[ $? -ne "0" ]]; then
+      exit 1
+    fi
+    kubectl $CONTEXT apply -n $TESTING_NAMESPACE -f /tmp/pep.yaml
+    #    envsubst < "$DIR"/yaml/client-proxy.yaml | kubectl $CONTEXT apply -f -
+
+    sleep 5
+
+    kubectl $CONTEXT wait pods -n $TESTING_NAMESPACE -l ambient-type=pep --for condition=Ready --timeout=120s
     if [[ $? != "0" ]]; then
-        echo "Failed to deploy PEP proxies... exiting dirty for log review"
+        echo "Failed to deploy PEP."
+        cleanup_cluster
         exit 1
     fi
     sleep 10
     kubectl $CONTEXT get pod -A
 
-    prepAmbientTest
 
     # Run performance test and write results to file
     runPerfTest "Ambient (uProxies + PEPs)"
 
     # Clean up proxies
-    kubectl $CONTEXT delete -f "$DIR"/yaml/server-proxy.yaml -f "$DIR"/yaml/client-proxy.yaml -f "$DIR"/yaml/perf-test.yaml
+    kubectl $CONTEXT delete -n $TESTING_NAMESPACE -f "$DIR"/yaml/server-proxy.yaml -f "$DIR"/yaml/client-proxy.yaml -f "$DIR"/yaml/perf-test.yaml
 }
 
 writeResults()
@@ -348,8 +343,9 @@ cleanup_cluster() {
     go run istioctl/cmd/istioctl/main.go x uninstall --purge -y $CONTEXT || true
     kubectl $CONTEXT delete -f "$DIR"/yaml/perf-test.yaml -f "$DIR"/yaml/client-proxy.yaml -f "$DIR"/yaml/server-proxy.yaml || true
     kubectl $CONTEXT delete ns istio-system || true
-    kubectl $CONTEXT label ns default istio-injection- || true
-    kubectl $CONTEXT label ns default istio.io/dataplane-mode- || true
+    kubectl $CONTEXT delete ns $TESTING_NAMESPACE || true
+    kubectl $CONTEXT label ns $TESTING_NAMESPACE istio-injection- || true
+    kubectl $CONTEXT label ns $TESTING_NAMESPACE istio.io/dataplane-mode- || true
 }
 
 trap_ctrlc() {
@@ -363,11 +359,12 @@ pushd "$AMBIENT_REPO_DIR" || exit
 
 trap "trap_ctrlc" 2
 
+kubectl create ns $TESTING_NAMESPACE
 # Apply image pull secret, if set, to kube-system and default, we handle istio's ns during install
 # This is useful for our GAR-stored images being deployed to an EKS cluster
 if [[ ! -z "$IMAGE_PULL_SECRET" ]]; then
     kubectl $CONTEXT apply -n kube-system -f $IMAGE_PULL_SECRET
-    kubectl $CONTEXT apply -n default -f $IMAGE_PULL_SECRET
+    kubectl $CONTEXT apply -n $TESTING_NAMESPACE -f $IMAGE_PULL_SECRET
 fi
 
 noMesh
@@ -377,7 +374,7 @@ sidecarsWithHBONE
 # for compariable and fair testing.
 #linkerdTest
 # Label namespace, as the CNI relies on this label
-kubectl $CONTEXT label ns default istio.io/dataplane-mode=ambient --overwrite
+kubectl $CONTEXT label ns $TESTING_NAMESPACE istio.io/dataplane-mode=ambient --overwrite
 ambientNoPEPs
 ambientWithPEPs
 

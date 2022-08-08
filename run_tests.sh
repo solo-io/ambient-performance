@@ -17,6 +17,11 @@ CONTEXT=`yq '.context' "$config_file"`
 K8S_TYPE=`yq '.k8s_type' "$config_file"`
 IMAGE_PULL_SECRET=`yq '.image_pull_secret' "$config_file"`
 
+CONTINUE_ON_FAIL=`yq '.continue_on_fail' "$config_file"`
+if [[ -z "$CONTINUE_ON_FAIL" ]]; then
+    CONTINUE_ON_FAIL="yes"
+fi
+
 FINAL_RESULT=`yq '.final_result' "$config_file"`
 if [[ -z "$FINAL_RESULT" ]]; then
     FINAL_RESULT="/tmp/results.txt"
@@ -36,6 +41,16 @@ Test run: $(date)
 
 EOF
 
+if [[ -f "log" ]]; then
+    mv "log" "log-$(date +%Y%m%d-%H%M%S)"
+fi
+
+log() {
+    # -Is is not standard, so let's pass args instead
+    d=$(date +%FT%T%:z)
+    echo "[$d] $*" | tee -a "log"
+}
+
 cat $config_file | yq -o json | jq -c '.clusters[]' | while read i
 do
     # jq -er '.context | values
@@ -53,20 +68,28 @@ do
         RESULT_FILE="/tmp/results.txt"
     fi
 
-    echo "Running tests for cluster: $CONTEXT_CLUSTER"
-    set -x
-    SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" NIGHTHAWK_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./run_perf_tests.sh
-    
-    EXIT_CODE=$?
-    set +x
-    if [[ $EXIT_CODE -ne 0 ]]; then
-        # 2 is ctrl+c exit
-        if [[ $EXIT_CODE -eq 2 ]]; then
-            exit 2
+    while true; do
+        log "Running tests for cluster: $CONTEXT_CLUSTER"
+        log "Running test: " SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" NIGHTHAWK_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./perf_tests.sh
+        SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" NIGHTHAWK_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./perf_tests.sh
+        
+        EXIT_CODE=$?
+        if [[ $EXIT_CODE -ne 0 ]]; then
+            # 2 is ctrl+c exit
+            if [[ $EXIT_CODE -eq 2 ]]; then
+                exit 2
+            fi
+            log "Failed to run tests for $CONTEXT_CLUSTER with protocol: $protocol, parameters: $PARAMS_CLUSTER"
+            if [[ "$CONTINUE_ON_FAIL" == "yes" ]]; then
+                log "Continuing on fail, going to next cluster"
+                break
+            fi
+            log "Waiting 30 seconds and restarting test."
+            sleep 30
+        elif [[ $EXIT_CODE -eq 0 ]]; then
+            break
         fi
-        echo "Failed to run tests for $CONTEXT with protocol: $protocol, parameters: $PARAMS_CLUSTER" | tee -a "$FINAL_RESULT"
-        continue
-    fi
+    done
 
     sleep 5 # Give time for file to be written to disk
 
