@@ -1,7 +1,7 @@
 #!/bin/bash
 
 dir="$( cd "$( dirname "$0" )" && pwd )"
-config_file="$dir/config.yaml"
+config_file=${CONFIG_FILE:-"$dir/config.yaml"}
 
 SERVICE_PORT_NAME=`yq '.service_port_name' "$config_file"`
 if [ -z "$SERVICE_PORT_NAME" ]; then
@@ -62,6 +62,10 @@ do
     SERVICE_PORT_NAME_CLUSTER=$(echo $i | jq -er '.service_port_name | values' || echo $SERVICE_PORT_NAME)
     PARAMS_CLUSTER=$(echo $i | jq -er '.params | values' || echo $PARAMS)
     IMAGE_PULL_SECRET=$(echo $i | jq -er '.image_pull_secret | values' || echo $IMAGE_PULL_SECRET)
+
+    if [[ "$IMAGE_PULL_SECRET" == "null" ]]; then
+        IMAGE_PULL_SECRET=""
+    fi
 
     RESULT_FILE=`echo $i | jq -r '.result_file | values'`
     if [[ -z "$RESULT_FILE" ]]; then

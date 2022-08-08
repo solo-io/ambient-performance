@@ -3,13 +3,14 @@
 # Setup some variable defaults, these should be read from the environment
 start=$(date +%s)
 DIR="$( cd "$( dirname "$0" )" && pwd )"
+TMPDIR=$(mktemp -d)
 NIGHTHAWK_PARAMS=${NIGHTHAWK_PARAMS:-"--concurrency 1 --output-format json --rps 200 --duration 60"}
 # NIGHTHAWK_PARAMS="--concurrency 1 --output-format json --max-requests-per-connection 1 --rps 200 --duration 60"
 SERVICE_PORT_NAME=${SERVICE_PORT_NAME:-"tcp-enforcment"}
 AMBIENT_REPO_DIR=${AMBIENT_REPO_DIR:-"$DIR/../istio-sidecarless"}
 DATERUN=$(date +"%Y%m%d-%H%M")
 TESTING_NAMESPACE="test-$DATERUN"
-RESULTS_JSON=${RESULTS_JSON:-"/tmp/results-$DATERUN.json"}
+RESULTS_JSON=${RESULTS_JSON:-"$TMPDIR/results-$DATERUN.json"}
 RESULTS_FILE=${RESULTS_FILE:-"$DIR/results/results-$DATERUN.csv"}
 if [[ ! -z "$CONTEXT" ]]; then
     CONTEXT="--context $CONTEXT"
@@ -94,7 +95,7 @@ installIstio() {
     secret=""
     if [[ "$IMAGE_PULL_SECRET_NAME" != "" ]]; then
         log "Creating IstioOperator for imagePullSecrets"
-        cat <<EOF >/tmp/imagepullsecrets.yaml
+        cat <<EOF >$TMPDIR/imagepullsecrets.yaml
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 spec:
@@ -103,7 +104,7 @@ spec:
       imagePullSecrets:
         - $IMAGE_PULL_SECRET_NAME
 EOF
-        secret="-f /tmp/imagepullsecrets.yaml"
+        secret="-f $TMPDIR/imagepullsecrets.yaml"
 
         log "Creating istio-system and applying the image pull secret"
         kctl create ns istio-system
@@ -117,9 +118,9 @@ EOF
         return 1
     fi
 
-    if [[ -f "/tmp/imagepullsecrets.yaml" ]]; then
+    if [[ -f "$TMPDIR/imagepullsecrets.yaml" ]]; then
         log "Removing temporary image pull secret yaml"
-        rm "/tmp/imagepullsecrets.yaml"
+        rm "$TMPDIR/imagepullsecrets.yaml"
     fi
 }
 
@@ -145,6 +146,7 @@ deployWorkloads() {
         log "Error: nighthawk_server pod failed to start"
         return 1
     fi
+    sleep 5
 }
 
 writeResults() {
@@ -238,7 +240,7 @@ EOF
 }
 
 sidecars() {
-    cat <<EOF >/tmp/sidecarnohbone.yaml
+    cat <<EOF >$TMPDIR/sidecarnohbone.yaml
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 metadata:
@@ -251,8 +253,8 @@ spec:
 EOF
 
     log "Installing Istio"
-    installIstio --set profile=default -f /tmp/sidecarnohbone.yaml
-    rm /tmp/sidecarnohbone.yaml
+    installIstio --set profile=default -f $TMPDIR/sidecarnohbone.yaml
+    rm $TMPDIR/sidecarnohbone.yaml
 
     applyMutualTLS
 
@@ -285,7 +287,7 @@ EOF
 }
 
 sidecarsHBONE() {
-    cat <<EOF >/tmp/sidecarhbone.yaml
+    cat <<EOF >$TMPDIR/sidecarhbone.yaml
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 metadata:
@@ -298,8 +300,8 @@ spec:
 EOF
 
     log "Installing Istio"
-    installIstio --set profile=default -f /tmp/sidecarhbone.yaml
-    rm /tmp/sidecarhbone.yaml
+    installIstio --set profile=default -f $TMPDIR/sidecarhbone.yaml
+    rm $TMPDIR/sidecarhbone.yaml
 
     applyMutualTLS
 
@@ -405,9 +407,9 @@ EOF
     fi
 
     log "Generating PEP deployment"
-    touch /tmp/ips.yaml
+    touch $TMPDIR/ips.yaml
     if [[ ! -z "$IMAGE_PULL_SECRET_NAME" ]]; then
-        cat <<EOF >/tmp/ips.yaml
+        cat <<EOF >$TMPDIR/ips.yaml
 spec:
   template:
     spec:
@@ -416,14 +418,14 @@ spec:
 EOF
     fi
 
-    cat <<EOF >/tmp/pep-prep.yaml
+    cat <<EOF >$TMPDIR/pep-prep.yaml
 `envsubst < "$DIR/yaml/server-proxy.yaml"`
 ---
-`cat /tmp/ips.yaml`
+`cat $TMPDIR/ips.yaml`
 EOF
-    cat /tmp/pep-prep.yaml | yq eval-all '. as $item ireduce ({}; . * $item)' > /tmp/pep.yaml
-    kctl apply -n $TESTING_NAMESPACE -f /tmp/pep.yaml
-    rm /tmp/pep.yaml /tmp/ips.yaml /tmp/pep-prep.yaml || true
+    cat $TMPDIR/pep-prep.yaml | yq eval-all '. as $item ireduce ({}; . * $item)' > $TMPDIR/pep.yaml
+    kctl apply -n $TESTING_NAMESPACE -f $TMPDIR/pep.yaml
+    rm $TMPDIR/pep.yaml $TMPDIR/ips.yaml $TMPDIR/pep-prep.yaml || true
 
     kctl -n $TESTING_NAMESPACE wait pods -l ambient-type=pep --for condition=Ready --timeout=120s
     if [[ $? -ne 0 ]]; then
@@ -449,8 +451,6 @@ trap "trapCtrlC" 2
 # Run the tests
 # These are in loops as EKS has proven to be predictably unpredictable on if a test will actually complete..
 # so on failure, clean up.. wait.. and just try again
-
-# No Mesh
 runTest "No Mesh" noMesh
 runTest "Sidecars" sidecars
 runTest "Sidecars w/ HBONE" sidecarsHBONE
