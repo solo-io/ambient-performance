@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Setup some variable defaults, these should be read from the environment
-start=$(date +%s)
+startTime=$(date +%s)
 DIR="$( cd "$( dirname "$0" )" && pwd )"
 TMPDIR=$(mktemp -d)
 NIGHTHAWK_PARAMS=${NIGHTHAWK_PARAMS:-"--concurrency 1 --output-format json --rps 200 --duration 60"}
@@ -237,8 +237,8 @@ runTest() {
         ec=$?
         cleanupCluster
         if [[ "$ec" != "0" ]]; then
-            log "Error: test $1 failed... will wait 5 seconds and retry (ec=$ec)"
-            sleep 5
+            log "Error: test $1 failed... will wait 30 seconds and retry (ec=$ec)"
+            sleep 30
         else
             log "Test $1 succeeded (ec=$ec)"
             break
@@ -443,7 +443,7 @@ EOF
 
     log "Generating PEP deployment"
     if [[ ! -z "$IMAGE_PULL_SECRET_NAME" ]]; then
-        cat <<EOF >>$TMP/pep-prep.yaml
+        cat <<EOF >>$TMPDIR/pep-prep.yaml
 `envsubst < "$DIR/yaml/server-proxy.yaml"`
 ---
 spec:
@@ -496,12 +496,5 @@ log "All tests completed, writing results"
 writeResults
 
 endTime=$(date +%s)
-dt=$(echo "$endTime - $res1" | bc)
-dd=$(echo "$dt/86400" | bc)
-dt2=$(echo "$dt-86400*$dd" | bc)
-dh=$(echo "$dt2/3600" | bc)
-dt3=$(echo "$dt2-3600*$dh" | bc)
-dm=$(echo "$dt3/60" | bc)
-ds=$(echo "$dt3-60*$dm" | bc)
-
-log `LC_NUMERIC=C printf "Total runtime: %d:%02d:%02d:%02.4f\n" $dd $dh $dm $ds`
+duration=$((endTime - startTime))
+log `LC_NUMERIC=C printf "Total runtime: %d\n" $duration`
