@@ -1,2 +1,3 @@
 perf_test_results.json
 *.out
+config*.yaml

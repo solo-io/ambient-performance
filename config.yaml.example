@@ -1,0 +1,18 @@
+service_port_name: "http"
+params: "--concurrency 1 --simple-warmup --output-format json --rps 200 --duration 60"
+final_result: "/tmp/results.txt"
+hub: "$SOLOHUB"
+tag: "aws"
+linkerd: true
+clusters:
+- context: "gke_solo-test-236622_us-west1-c_daniel-istio"
+  k8s_type: "gcp"
+  result_file: "/tmp/results-ambient-gcp-nowarmup.txt"
+  params: "--concurrency 1--output-format json --rps 200 --duration 60"
+- context: "gke_solo-test-236622_us-west1-c_daniel-istio"
+  k8s_type: "gcp"
+  result_file: "/tmp/results-ambient-gcp-h1.csv"
+- context: "gke_solo-test-236622_us-west1-c_daniel-istio"
+  k8s_type: "gcp"
+  result_file: "/tmp/results-ambient-gcp-h2.csv"
+  params: "--concurrency 1 --simple-warmup --output-format json --rps 200 --duration 60 --protocol http2"
