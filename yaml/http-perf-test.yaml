@@ -66,51 +66,51 @@ data:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: nhclient
+  name: benchmark-client
 # ---
 # apiVersion: v1
 # kind: Service
 # metadata:
-#   name: nhclient
+#   name: benchmark-client
 #   labels:
-#     app: nhclient
-#     service: nhclient
+#     app: benchmark-client
+#     service: benchmark-client
 # spec:
 #   ports:
 #   - name: not-http-echo
 #     port: 9999
 #     protocol: TCP
 #   selector:
-#     app: nhclient
+#     app: benchmark-client
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: nhserver
+  name: benchmark-server
 spec:
   ports:
   - name: tcp-enforcment
     port: 8080
     protocol: TCP
   selector:
-    app: nhserver
+    app: benchmark-server
   type: ClusterIP
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: nhserver
-  name: nhserver
+    app: benchmark-server
+  name: benchmark-server
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: nhserver
+      app: benchmark-server
   template:
     metadata:
       labels:
-        app: nhserver
+        app: benchmark-server
     spec:
       affinity:
         podAntiAffinity:
@@ -120,7 +120,7 @@ spec:
               - key: app
                 operator: In
                 values:
-                - "nhclient"
+                - "benchmark-client"
             topologyKey: "kubernetes.io/hostname"
       volumes:
       - name: shared-data
@@ -164,17 +164,17 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: nhclient
-  name: nhclient
+    app: benchmark-client
+  name: benchmark-client
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: nhclient
+      app: benchmark-client
   template:
     metadata:
       labels:
-        app: nhclient
+        app: benchmark-client
     spec:
       affinity:
         podAntiAffinity:
@@ -184,10 +184,9 @@ spec:
               - key: app
                 operator: In
                 values:
-                - "nhserver"
+                - "benchmark-server"
             topologyKey: "kubernetes.io/hostname"      
-      serviceAccountName: nhclient
-      volumes:
+      serviceAccountName: benchmark-client
       containers:
       - name: nighthawk
         securityContext:

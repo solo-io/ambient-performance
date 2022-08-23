@@ -42,7 +42,7 @@ spec:
               - key: app
                 operator: In
                 values:
-                - "nhserver"
+                - "benchmark-server"
             topologyKey: "kubernetes.io/hostname"
       containers:
       - args:
