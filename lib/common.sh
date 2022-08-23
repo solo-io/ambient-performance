@@ -67,7 +67,11 @@ writeResults() {
     else
         echo "Benchmark Parameters: $PARAMS" >> "$RESULTS_FILE"
     fi
-    echo "Service port name: $SERVICE_PORT_NAME" >> "$RESULTS_FILE"
+    if [[ -z "$COUNT" ]]; then
+        echo "Service port name: $SERVICE_PORT_NAME" >> "$RESULTS_FILE"
+    else
+        echo "TCP Connection Count: $COUNT" >> "$RESULTS_FILE"
+    fi
 
     printf "\n," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_NAMES[$i]}," >> "$RESULTS_FILE"; done
