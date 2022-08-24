@@ -4,12 +4,12 @@ dir="$( cd "$( dirname "$0" )" && pwd )"
 config_file=${CONFIG_FILE:-"$dir/config.yaml"}
 
 SERVICE_PORT_NAME=`yq '.service_port_name' "$config_file"`
-if [ -z "$SERVICE_PORT_NAME" ]; then
+if [[ "$SERVICE_PORT_NAME" == "null" ]]; then
     SERVICE_PORT_NAME="tcp-enforcement"
 fi
 
 PARAMS=`yq '.params' "$config_file"`
-if [[ -z "$PARAMS" ]]; then
+if [[ "$PARAMS" == "null" ]]; then
     echo "No params specified in config.yaml"
     exit 1
 fi
@@ -22,13 +22,23 @@ if [[ "$IMAGE_PULL_SECRET" == "null" ]]; then
     IMAGE_PULL_SECRET=""
 fi
 
+TEST_TYPE=`yq '.test_type' "$config_file"`
+if [[ "$TEST_TYPE" == "null" ]]; then
+    TEST_TYPE="http"
+fi
+
+COUNT=`yq '.count' "$config_file"`
+if [[ "$COUNT" == "null"  ]]; then
+    COUNT="1000"
+fi
+
 CONTINUE_ON_FAIL=`yq '.continue_on_fail' "$config_file"`
-if [[ -z "$CONTINUE_ON_FAIL" ]]; then
+if [[ "$CONTINUE_ON_FAIL" == "null"  ]]; then
     CONTINUE_ON_FAIL="yes"
 fi
 
 FINAL_RESULT=`yq '.final_result' "$config_file"`
-if [[ -z "$FINAL_RESULT" ]]; then
+if [[ "$FINAL_RESULT" == "null"  ]]; then
     FINAL_RESULT="/tmp/results.txt"
 fi
 
@@ -62,21 +72,40 @@ for i in $(seq 0 $((${NUM_CLUSTERS} - 1))); do
     SERVICE_PORT_NAME_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].service_port_name | values' || echo $SERVICE_PORT_NAME)
     PARAMS_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].params | values' || echo $PARAMS)
     IMAGE_PULL_SECRET=$(yq -o json "$config_file" | jq -er '.clusters['$i'].image_pull_secret | values' || echo $IMAGE_PULL_SECRET)
+    TEST_TYPE_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].test_type | values' || echo $TEST_TYPE)
+    COUNT_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].count | values' || echo $COUNT)
+
+    if [[ "$TEST_TYPE_CLUSTER" != "http" && "$TEST_TYPE_CLUSTER" != "tcp" && "$TEST_TYPE_CLUSTER" != "tcp-throughput" ]]; then
+        echo "Invalid test type: $TEST_TYPE_CLUSTER... skipping $CONTEXT_CLUSTER"
+        continue
+    fi
 
     RESULT_FILE=$(yq -o json "$config_file" | jq -r '.clusters['$i'].result_file | values')
     if [[ -z "$RESULT_FILE" ]]; then
         RESULT_FILE="/tmp/results.txt"
     fi
-    if [[ "$SERVICE_PORT_NAME_CLUSTER" == "http" ]]; then
-        protocol="HTTP (w/ mTLS Layer 7 parsing)"
+    if [[ "$TEST_TYPE_CLUSTER" == "http" ]]; then
+        if [[ "$SERVICE_PORT_NAME_CLUSTER" == "http" ]]; then
+            protocol="HTTP (w/ mTLS Layer 7 parsing)"
+        else
+            protocol="HTTP (w/o mTLS Layer 7 parsing)"
+        fi
+    elif [[ "$TEST_TYPE_CLUSTER" == "tcp-throughput" ]]; then
+        protocol="TCP Throughput"
     else
-        protocol="HTTP (w/o mTLS Layer 7 parsing)"
+        protocol="TCP Latency"
     fi
 
     while true; do
         log "Running tests for cluster: $CONTEXT_CLUSTER"
-        log "Running test: " SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" NIGHTHAWK_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./perf_tests.sh
-        SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" NIGHTHAWK_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./perf_tests.sh
+        log "Test type: $TEST_TYPE_CLUSTER"
+        if [[ "$TEST_TYPE_CLUSTER" == "http" ]]; then
+            log "Running test: " SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" NIGHTHAWK_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./perf_tests.sh
+            SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" NIGHTHAWK_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./lib/http_perf_tests.sh
+        else
+            log "Running test: " TEST_TYPE="$TEST_TYPE_CLUSTER" COUNT="$COUNT_CLUSTER" PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./tcp_perf_tests.sh
+            TEST_TYPE="$TEST_TYPE_CLUSTER" COUNT="$COUNT_CLUSTER" PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./lib/tcp_perf_tests.sh
+        fi
         
         EXIT_CODE=$?
         if [[ $EXIT_CODE -ne 0 ]]; then
@@ -84,7 +113,7 @@ for i in $(seq 0 $((${NUM_CLUSTERS} - 1))); do
             if [[ $EXIT_CODE -eq 2 ]]; then
                 exit 2
             fi
-            log "Failed to run tests for $CONTEXT_CLUSTER with protocol: $protocol, parameters: $PARAMS_CLUSTER"
+            log "Failed to run tests for $CONTEXT_CLUSTER, parameters: $PARAMS_CLUSTER"
             if [[ "$CONTINUE_ON_FAIL" == "yes" ]]; then
                 log "Continuing on fail, going to next cluster"
                 break
@@ -98,8 +127,8 @@ for i in $(seq 0 $((${NUM_CLUSTERS} - 1))); do
 
     sleep 5 # Give time for file to be written to disk
 
-    echo "Nighthawk client parameters: $PARAMS_CLUSTER" | tee -a "$FINAL_RESULT"
-    echo "Protocol: $protocol ($SERVICE_PORT_NAME_CLUSTER)" | tee -a "$FINAL_RESULT"
+    echo "Benchmark client parameters: $PARAMS_CLUSTER" | tee -a "$FINAL_RESULT"
+    echo "Protocol: $protocol" | tee -a "$FINAL_RESULT"
     echo "------------- $CONTEXT_CLUSTER -------------" | tee -a "$FINAL_RESULT"
     RESULTS_FILE="$RESULT_FILE" ./conv_results.sh | tee -a "$FINAL_RESULT"
 done
