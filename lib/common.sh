@@ -43,6 +43,27 @@ RESULTS_STDDEV=()
 RESULTS_MAX=()
 RESULTS_MIN=()
 
+RESULTS_RECV_P50=()
+RESULTS_RECV_P90=()
+RESULTS_RECV_P95=()
+RESULTS_RECV_P99=()
+RESULTS_RECV_P999=()
+RESULTS_RECV_P9999=()
+RESULTS_RECV_MEAN=()
+RESULTS_RECV_STDDEV=()
+RESULTS_RECV_MAX=()
+RESULTS_RECV_MIN=()
+RESULTS_SEND_P50=()
+RESULTS_SEND_P90=()
+RESULTS_SEND_P95=()
+RESULTS_SEND_P99=()
+RESULTS_SEND_P999=()
+RESULTS_SEND_P9999=()
+RESULTS_SEND_MEAN=()
+RESULTS_SEND_STDDEV=()
+RESULTS_SEND_MAX=()
+RESULTS_SEND_MIN=()
+
 if [[ ! -d "results" ]]; then
     mkdir "results"
 fi
@@ -103,6 +124,75 @@ writeResults() {
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_MAX[$i]}," >> "$RESULTS_FILE"; done
     printf "\nMin," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_MIN[$i]}," >> "$RESULTS_FILE"; done
+
+    printf "\n" >> "$RESULTS_FILE"
+}
+
+writeThroughputResults() {
+    echo "Run time: $(date)" > "$RESULTS_FILE"
+    if [[ -z "$PARAMS" ]]; then
+        echo "Benchmark parameters: $NIGHTHAWK_PARAMS" >> "$RESULTS_FILE"
+    else
+        echo "Benchmark Parameters: $PARAMS" >> "$RESULTS_FILE"
+    fi
+    if [[ -z "$COUNT" ]]; then
+        echo "Service port name: $SERVICE_PORT_NAME" >> "$RESULTS_FILE"
+    else
+        echo "TCP Connection Count: $COUNT" >> "$RESULTS_FILE"
+    fi
+
+    printf "\n," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_NAMES[$i]}," >> "$RESULTS_FILE"; done
+
+    printf "\np50 send," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_P50[$i]}," >> "$RESULTS_FILE"; done
+#    printf "\np50 recv," >> "$RESULTS_FILE"
+#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_P50[$i]}," >> "$RESULTS_FILE"; done
+
+    printf "\np90 send," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_P90[$i]}," >> "$RESULTS_FILE"; done
+#    printf "\np90 recv," >> "$RESULTS_FILE"
+#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_P90[$i]}," >> "$RESULTS_FILE"; done
+
+    printf "\np95 send," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_P95[$i]}," >> "$RESULTS_FILE"; done
+#    printf "\np95 recv," >> "$RESULTS_FILE"
+#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_P95[$i]}," >> "$RESULTS_FILE"; done
+
+    printf "\np99 send," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_P99[$i]}," >> "$RESULTS_FILE"; done
+#    printf "\np99 recv," >> "$RESULTS_FILE"
+#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_P99[$i]}," >> "$RESULTS_FILE"; done
+
+    printf "\np99.9 send," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_P999[$i]}," >> "$RESULTS_FILE"; done
+#    printf "\np99.9 recv," >> "$RESULTS_FILE"
+#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_P999[$i]}," >> "$RESULTS_FILE"; done
+
+    printf "\np99.99 send," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_P9999[$i]}," >> "$RESULTS_FILE"; done
+#    printf "\np99.99 recv," >> "$RESULTS_FILE"
+#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_P9999[$i]}," >> "$RESULTS_FILE"; done
+
+    printf "\nMean send," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_MEAN[$i]}," >> "$RESULTS_FILE"; done
+#    printf "\nMean recv," >> "$RESULTS_FILE"
+#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_MEAN[$i]}," >> "$RESULTS_FILE"; done
+
+    printf "\nStddev send," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_STDDEV[$i]}," >> "$RESULTS_FILE"; done
+#    printf "\nStddev recv," >> "$RESULTS_FILE"
+#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_STDDEV[$i]}," >> "$RESULTS_FILE"; done
+
+    printf "\nMin send," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_MIN[$i]}," >> "$RESULTS_FILE"; done
+#    printf "\nMin recv," >> "$RESULTS_FILE"
+#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_MIN[$i]}," >> "$RESULTS_FILE"; done
+
+    printf "\nMax send," >> "$RESULTS_FILE"
+    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_MAX[$i]}," >> "$RESULTS_FILE"; done
+#    printf "\nMax recv," >> "$RESULTS_FILE"
+#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_MAX[$i]}," >> "$RESULTS_FILE"; done
 
     printf "\n" >> "$RESULTS_FILE"
 }
@@ -206,7 +296,12 @@ runTests
 popd || exit
 
 log "All tests completed, writing results"
-writeResults
+
+if [[ $TEST_TYPE == "tcp-throughput" ]]; then
+    writeThroughputResults
+else
+    writeResults
+fi
 
 endTime=$(date +%s)
 duration=$((endTime - startTime))

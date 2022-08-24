@@ -115,9 +115,6 @@ EOF
         return 1
     fi
 
-    sleep 10
-    kctl get pod -A
-
     runPerfTest "Sidecars w/ HBONE"
     if [[ $? -ne 0 ]]; then
         log "Error: testing failed"

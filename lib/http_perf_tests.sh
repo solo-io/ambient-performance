@@ -27,7 +27,7 @@ runPerfTest() {
     fi
 
     log "Executing performance tests for: $test_name..."
-    eval kctl exec -n $TESTING_NAMESPACE deploy/nhclient -c nighthawk -- \
+    eval kctl exec -n $TESTING_NAMESPACE deploy/benchmark-client -c nighthawk -- \
         nighthawk_client "$NIGHTHAWK_PARAMS" http://benchmark-server:8080/ > "$RESULTS_JSON"
     if [[ $? -ne 0 ]]; then
         log "Error: nighthawk_client failed"

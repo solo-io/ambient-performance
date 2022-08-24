@@ -6,6 +6,7 @@ RUN apt update -y && \
     apt upgrade -y && \
     apt install -y iperf3 jq datamash
 
-COPY run.sh /run.sh
-
-RUN chmod +x /run.sh
+COPY run-latency.sh /run-latency.sh
+RUN chmod +x /run-latency.sh
+COPY run-throughput.sh /run-throughput.sh
+RUN chmod +x /run-throughput.sh

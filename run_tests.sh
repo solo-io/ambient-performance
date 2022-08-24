@@ -75,7 +75,7 @@ for i in $(seq 0 $((${NUM_CLUSTERS} - 1))); do
     TEST_TYPE_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].test_type | values' || echo $TEST_TYPE)
     COUNT_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].count | values' || echo $COUNT)
 
-    if [[ "$TEST_TYPE_CLUSTER" != "http" && "$TEST_TYPE_CLUSTER" != "tcp" ]]; then
+    if [[ "$TEST_TYPE_CLUSTER" != "http" && "$TEST_TYPE_CLUSTER" != "tcp" && "$TEST_TYPE_CLUSTER" != "tcp-throughput" ]]; then
         echo "Invalid test type: $TEST_TYPE_CLUSTER... skipping $CONTEXT_CLUSTER"
         continue
     fi
@@ -90,8 +90,10 @@ for i in $(seq 0 $((${NUM_CLUSTERS} - 1))); do
         else
             protocol="HTTP (w/o mTLS Layer 7 parsing)"
         fi
+    elif [[ "$TEST_TYPE_CLUSTER" == "tcp-throughput" ]]; then
+        protocol="TCP Throughput"
     else
-        protocol="TCP"
+        protocol="TCP Latency"
     fi
 
     while true; do
@@ -101,8 +103,8 @@ for i in $(seq 0 $((${NUM_CLUSTERS} - 1))); do
             log "Running test: " SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" NIGHTHAWK_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./perf_tests.sh
             SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" NIGHTHAWK_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./lib/http_perf_tests.sh
         else
-            log "Running test: " COUNT="$COUNT_CLUSTER" PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./tcp_perf_tests.sh
-            COUNT="$COUNT_CLUSTER" PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./lib/tcp_perf_tests.sh
+            log "Running test: " TEST_TYPE="$TEST_TYPE_CLUSTER" COUNT="$COUNT_CLUSTER" PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./tcp_perf_tests.sh
+            TEST_TYPE="$TEST_TYPE_CLUSTER" COUNT="$COUNT_CLUSTER" PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./lib/tcp_perf_tests.sh
         fi
         
         EXIT_CODE=$?
