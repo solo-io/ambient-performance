@@ -275,7 +275,7 @@ trapCtrlC() {
 runTest() {
     while true; do
         log "Running test $1"
-        "$2"
+        "$2" ${@:3}
         ec=$?
         cleanupCluster
         if [[ "$ec" != "0" ]]; then

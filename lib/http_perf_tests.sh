@@ -46,14 +46,9 @@ runPerfTest() {
         RESULTS_STDDEV+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.pstdev)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
         RESULTS_MAX+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.max)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
         RESULTS_MIN+=("$(jq -r '.results[] | select(.name == "global") .statistics[] | select(.id == "benchmark_http_client.latency_2xx") | "\(.min)"' "$RESULTS_JSON" | sed 's/s//' | awk '{print $1*1000}')");
-        rm "$RESULTS_JSON"
     else
-        FORTIO_RESULTS+="
-$test_name
-start:      "$(dateUTC)
-        sleep 5
         for i in 1 2 3; do
-            eval kctl exec -n $TESTING_NAMESPACE deploy/fortio-deploy -- /usr/bin/fortio load "$PERF_CLIENT_PARAMS" -loglevel Warning http://httpbin-v$i:8000/get
+            eval kctl exec -n $TESTING_NAMESPACE deploy/fortio-deploy -- /usr/bin/fortio load "$PERF_CLIENT_PARAMS" -loglevel Warning http://httpbin-v$i:8000/get > "$RESULTS_JSON"
             if [[ $? -ne 0 ]]; then
                 log "Error: fortio_client failed"
                 return 1
@@ -62,6 +57,8 @@ start:      "$(dateUTC)
         FORTIO_RESULTS+="
 end:        "$(dateUTC)
     fi
+    
+    rm "$RESULTS_JSON"
 }
 
 deployWorkloads() {

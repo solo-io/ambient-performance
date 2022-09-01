@@ -89,6 +89,9 @@ for i in $(seq 0 $((${NUM_CLUSTERS} - 1))); do
     IMAGE_PULL_SECRET=$(yq -o json "$config_file" | jq -er '.clusters['$i'].image_pull_secret | values' || echo $IMAGE_PULL_SECRET)
     TEST_TYPE_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].test_type | values' || echo $TEST_TYPE)
     COUNT_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].count | values' || echo $COUNT)
+    PERF_CLIENT_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].perf_client | values' || echo $PERF_CLIENT)
+    TEST_WAIT_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].test_wait | values' || echo $TEST_WAIT)
+    SERVER_SCALE_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].server_scale | values' || echo $SERVER_SCALE)
 
     if [[ "$TEST_TYPE_CLUSTER" != "http" && "$TEST_TYPE_CLUSTER" != "tcp" && "$TEST_TYPE_CLUSTER" != "tcp-throughput" ]]; then
         echo "Invalid test type: $TEST_TYPE_CLUSTER... skipping $CONTEXT_CLUSTER"
@@ -116,7 +119,7 @@ for i in $(seq 0 $((${NUM_CLUSTERS} - 1))); do
         log "Test type: $TEST_TYPE_CLUSTER"
         if [[ "$TEST_TYPE_CLUSTER" == "http" ]]; then
             log "Running test: " SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" PERF_CLIENT_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./perf_tests.sh
-            SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" PERF_CLIENT_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" TEST_WAIT="$TEST_WAIT" SERVER_SCALE="$SERVER_SCALE" ./lib/http_perf_tests.sh
+            SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" PERF_CLIENT_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" TEST_WAIT="$TEST_WAIT_CLUSTER" SERVER_SCALE="$SERVER_SCALE_CLUSTER" PERF_CLIENT="$PERF_CLIENT_CLUSTER" ./lib/http_perf_tests.sh
         else
             log "Running test: " TEST_TYPE="$TEST_TYPE_CLUSTER" COUNT="$COUNT_CLUSTER" PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./tcp_perf_tests.sh
             TEST_TYPE="$TEST_TYPE_CLUSTER" COUNT="$COUNT_CLUSTER" PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./lib/tcp_perf_tests.sh
