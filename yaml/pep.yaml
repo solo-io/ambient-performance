@@ -1,0 +1,26 @@
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: Gateway
+metadata:
+  name: gateway-v1
+  annotations:
+    istio.io/service-account: httpbin-v1
+spec:
+  gatewayClassName: istio-mesh
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: Gateway
+metadata:
+  name: gateway-v2
+  annotations:
+    istio.io/service-account:  httpbin-v2
+spec:
+  gatewayClassName: istio-mesh
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: Gateway
+metadata:
+  name: gateway-v3
+  annotations:
+    istio.io/service-account:  httpbin-v3
+spec:
+  gatewayClassName: istio-mesh

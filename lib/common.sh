@@ -4,8 +4,8 @@
 startTime=$(date +%s)
 DIR="$( cd "$( dirname "$0" )" && pwd )"
 TMPDIR=$(mktemp -d)
-NIGHTHAWK_PARAMS=${NIGHTHAWK_PARAMS:-"--concurrency 1 --output-format json --rps 200 --duration 60"}
-# NIGHTHAWK_PARAMS="--concurrency 1 --output-format json --max-requests-per-connection 1 --rps 200 --duration 60"
+PERF_CLIENT_PARAMS=${PERF_CLIENT_PARAMS:-"--concurrency 1 --output-format json --rps 200 --duration 300"}
+# PERF_CLIENT_PARAMS="--concurrency 1 --output-format json --max-requests-per-connection 1 --rps 200 --duration 60"
 SERVICE_PORT_NAME=${SERVICE_PORT_NAME:-"tcp-enforcment"}
 AMBIENT_REPO_DIR=${AMBIENT_REPO_DIR:-"$DIR/../../istio-sidecarless"}
 DATERUN=$(date +"%Y%m%d-%H%M")
@@ -84,7 +84,7 @@ log() {
 writeResults() {
     echo "Run time: $(date)" > "$RESULTS_FILE"
     if [[ -z "$PARAMS" ]]; then
-        echo "Benchmark parameters: $NIGHTHAWK_PARAMS" >> "$RESULTS_FILE"
+        echo "Benchmark parameters: $PERF_CLIENT_PARAMS" >> "$RESULTS_FILE"
     else
         echo "Benchmark Parameters: $PARAMS" >> "$RESULTS_FILE"
     fi
@@ -131,7 +131,7 @@ writeResults() {
 writeThroughputResults() {
     echo "Run time: $(date)" > "$RESULTS_FILE"
     if [[ -z "$PARAMS" ]]; then
-        echo "Benchmark parameters: $NIGHTHAWK_PARAMS" >> "$RESULTS_FILE"
+        echo "Benchmark parameters: $PERF_CLIENT_PARAMS" >> "$RESULTS_FILE"
     else
         echo "Benchmark Parameters: $PARAMS" >> "$RESULTS_FILE"
     fi
@@ -255,7 +255,7 @@ applyImagePullSecret() {
 cleanupCluster() {
     log "Cleaning up cluster"
     go run istioctl/cmd/istioctl/main.go x uninstall --purge -y $CONTEXT || true
-    kctl delete -n $TESTING_NAMESPACE -f "$DIR/../yaml" || true
+    kctl delete -n $TESTING_NAMESPACE -f "$DIR/../yaml" --ignore-not-found=true || true
     kctl delete ns istio-system || true
     kctl delete ns $TESTING_NAMESPACE || true
 }
@@ -280,6 +280,8 @@ runTest() {
             break
         fi
     done
+    log "Waiting $TEST_WAIT seconds between tests"
+    sleep $TEST_WAIT
 }
 
 . $DIR/tests.sh
