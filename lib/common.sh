@@ -16,6 +16,8 @@ if [[ ! -z "$CONTEXT" ]]; then
     CONTEXT="--context $CONTEXT"
 fi
 
+FORTIO_RESULTS=""
+
 IMAGE_PULL_SECRET_NAME=""
 if [[ ! -z "$IMAGE_PULL_SECRET" ]]; then
     if [[ -f "$IMAGE_PULL_SECRET" ]]; then
@@ -79,6 +81,10 @@ log() {
     # -Is is not standard, so let's pass args instead
     d=$(date +%FT%T%:z)
     echo "[$d] $*" | tee -a "log"
+}
+
+dateUTC() {
+    echo $(date -u '+%F %T')
 }
 
 writeResults() {
@@ -299,10 +305,12 @@ popd || exit
 
 log "All tests completed, writing results"
 
-if [[ $TEST_TYPE == "tcp-throughput" ]]; then
-    writeThroughputResults
-else
-    writeResults
+if [[ $PERF_CLIENT == "nighthawk" ]]; then
+    if [[ $TEST_TYPE == "tcp-throughput" ]]; then
+        writeThroughputResults
+    else
+        writeResults
+    fi
 fi
 
 endTime=$(date +%s)

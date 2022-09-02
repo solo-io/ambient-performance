@@ -140,10 +140,12 @@ for i in $(seq 0 $((${NUM_CLUSTERS} - 1))); do
         fi
     done
 
-    sleep 5 # Give time for file to be written to disk
+    if [[ $PERF_CLIENT == "nighthawk" ]]; then
+        sleep 5 # Give time for file to be written to disk
 
-    echo "Benchmark client parameters: $PARAMS_CLUSTER" | tee -a "$FINAL_RESULT"
-    echo "Protocol: $protocol" | tee -a "$FINAL_RESULT"
-    echo "------------- $CONTEXT_CLUSTER -------------" | tee -a "$FINAL_RESULT"
-    RESULTS_FILE="$RESULT_FILE" ./conv_results.sh | tee -a "$FINAL_RESULT"
+        echo "Benchmark client parameters: $PARAMS_CLUSTER" | tee -a "$FINAL_RESULT"
+        echo "Protocol: $protocol" | tee -a "$FINAL_RESULT"
+        echo "------------- $CONTEXT_CLUSTER -------------" | tee -a "$FINAL_RESULT"
+        RESULTS_FILE="$RESULT_FILE" ./conv_results.sh | tee -a "$FINAL_RESULT"
+    fi
 done
