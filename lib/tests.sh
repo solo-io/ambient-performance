@@ -164,7 +164,7 @@ ambientWithPEPs() {
     profile="ambient"
     pep="$DIR/../yaml/pep.yaml"
     if [[ ! -z "$1" ]]; then
-        pep="$1"
+        pep="$DIR/../yaml/$1"
     fi
 
     log "Installing Istio with profile: $profile"

@@ -104,15 +104,20 @@ deployWorkloads() {
 }
 
 runTests() {
+    pep="pep.yaml"
+    if [[ "$PERF_CLIENT" == "fortio" ]]; then
+      pep="pep-fortio.yaml"
+    fi
+
     runTest "No Mesh" noMesh
     runTest "Sidecars" sidecars
 #     runTest "Sidecars w/ HBONE" sidecarsHBONE
     runPerfTest "Sidecars w/ HBONE" "skip"
     runTest "Ambient" ambient
-    runTest "Ambient w/ Server PEP" ambientWithPEPs
-    echo "$FORTIO_RESULTS"
-    printf "\n"
+    runTest "Ambient w/ Server PEP" ambientWithPEPs $pep
 
+    echo "$FORTIO_RESULTS"
+    echo ""
 }
 
 
