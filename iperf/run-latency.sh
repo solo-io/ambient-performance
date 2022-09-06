@@ -12,7 +12,7 @@ timings=()
 i=0
 
 while [ $i -lt $count ]; do
-    test=$(iperf3 $params -J 2>/dev/null | jq "[.intervals[0].streams[].seconds*1000] | add" 2>/dev/null)
+    test=$(timeout 5s iperf3 $params -J | jq '[.intervals[0].streams[].seconds*1000] | add')
     if [[ $? -ne 0 ]]; then
         >&2 echo -n "!"
         continue

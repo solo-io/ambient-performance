@@ -260,7 +260,7 @@ applyImagePullSecret() {
 
 cleanupCluster() {
     log "Cleaning up cluster"
-    go run istioctl/cmd/istioctl/main.go x uninstall --purge -y $CONTEXT || true
+    go run istioctl/cmd/istioctl/main.go uninstall --purge -y $CONTEXT || true
     kctl delete -n $TESTING_NAMESPACE -f "$DIR/../yaml" --ignore-not-found=true || true
     kctl delete ns istio-system || true
     kctl delete ns $TESTING_NAMESPACE || true

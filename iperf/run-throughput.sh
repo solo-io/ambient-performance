@@ -13,7 +13,7 @@ send=()
 i=0
 
 while [ $i -lt $count ]; do
-    test=$(iperf3 $params -J 2>/dev/null | jq -r 2>/dev/null)
+    test=$(timeout 20s iperf3 $params -J 2>/dev/null | jq -r 2>/dev/null)
     if [[ $? -ne 0 ]]; then
         >&2 echo -n "!"
         continue
