@@ -126,11 +126,6 @@ EOF
 
 ambient() {
     profile="ambient"
-    if [[ "$K8S_TYPE" == "eks" ]]; then
-        profile="ambient-aws"
-    elif [[ "$K8S_TYPE" == "gke" ]]; then
-        profile="ambient-gke"
-    fi
 
     log "Installing Istio with profile: $profile"
     installIstio --set profile=$profile
@@ -167,11 +162,6 @@ EOF
 
 ambientWithPEPs() {
     profile="ambient"
-    if [[ "$K8S_TYPE" == "eks" ]]; then
-        profile="ambient-aws"
-    elif [[ "$K8S_TYPE" == "gke" ]]; then
-        profile="ambient-gke"
-    fi
 
     log "Installing Istio with profile: $profile"
     installIstio --set profile=$profile
@@ -197,26 +187,10 @@ EOF
         return 1
     fi
 
-    log "Generating PEP deployment"
-    if [[ ! -z "$IMAGE_PULL_SECRET_NAME" ]]; then
-        cat <<EOF >>$TMPDIR/pep-prep.yaml
-`envsubst < "$DIR/../yaml/server-proxy.yaml"`
----
-spec:
-  template:
-    spec:
-      imagePullSecrets:
-      - name: $IMAGE_PULL_SECRET_NAME
-EOF
-        cat $TMPDIR/pep-prep.yaml | yq eval-all '. as $item ireduce ({}; . * $item)' > $TMPDIR/pep.yaml
-    else
-        envsubst < "$DIR/../yaml/server-proxy.yaml" >$TMPDIR/pep.yaml
-    fi
-
-    kctl apply -n $TESTING_NAMESPACE -f $TMPDIR/pep.yaml
-    rm $TMPDIR/pep.yaml $TMPDIR/ips.yaml $TMPDIR/pep-prep.yaml || true
-
-    kctl -n $TESTING_NAMESPACE wait pods -l ambient-type=pep --for condition=Ready --timeout=120s
+    kctl apply -n $TESTING_NAMESPACE -f "$DIR/../yaml/pep.yaml"
+    sleep 120
+#    ambient-proxy: benchmark-client-waypoint-proxy
+    kctl -n $TESTING_NAMESPACE wait pods -l ambient-proxy=benchmark-client-waypoint-proxy --for condition=Ready --timeout=120s
     if [[ $? -ne 0 ]]; then
         log "Error: PEP deployment failed"
         return 1

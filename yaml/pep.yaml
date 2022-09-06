@@ -1,0 +1,8 @@
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: Gateway
+metadata:
+  name: benchmark-client
+  annotations:
+    istio.io/service-account: benchmark-client
+spec:
+  gatewayClassName: istio-mesh
