@@ -152,53 +152,33 @@ writeThroughputResults() {
 
     printf "\np50 send," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_P50[$i]}," >> "$RESULTS_FILE"; done
-#    printf "\np50 recv," >> "$RESULTS_FILE"
-#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_P50[$i]}," >> "$RESULTS_FILE"; done
 
     printf "\np90 send," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_P90[$i]}," >> "$RESULTS_FILE"; done
-#    printf "\np90 recv," >> "$RESULTS_FILE"
-#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_P90[$i]}," >> "$RESULTS_FILE"; done
 
     printf "\np95 send," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_P95[$i]}," >> "$RESULTS_FILE"; done
-#    printf "\np95 recv," >> "$RESULTS_FILE"
-#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_P95[$i]}," >> "$RESULTS_FILE"; done
 
     printf "\np99 send," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_P99[$i]}," >> "$RESULTS_FILE"; done
-#    printf "\np99 recv," >> "$RESULTS_FILE"
-#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_P99[$i]}," >> "$RESULTS_FILE"; done
 
     printf "\np99.9 send," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_P999[$i]}," >> "$RESULTS_FILE"; done
-#    printf "\np99.9 recv," >> "$RESULTS_FILE"
-#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_P999[$i]}," >> "$RESULTS_FILE"; done
 
     printf "\np99.99 send," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_P9999[$i]}," >> "$RESULTS_FILE"; done
-#    printf "\np99.99 recv," >> "$RESULTS_FILE"
-#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_P9999[$i]}," >> "$RESULTS_FILE"; done
 
     printf "\nMean send," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_MEAN[$i]}," >> "$RESULTS_FILE"; done
-#    printf "\nMean recv," >> "$RESULTS_FILE"
-#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_MEAN[$i]}," >> "$RESULTS_FILE"; done
 
     printf "\nStddev send," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_STDDEV[$i]}," >> "$RESULTS_FILE"; done
-#    printf "\nStddev recv," >> "$RESULTS_FILE"
-#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_STDDEV[$i]}," >> "$RESULTS_FILE"; done
 
     printf "\nMin send," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_MIN[$i]}," >> "$RESULTS_FILE"; done
-#    printf "\nMin recv," >> "$RESULTS_FILE"
-#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_MIN[$i]}," >> "$RESULTS_FILE"; done
 
     printf "\nMax send," >> "$RESULTS_FILE"
     for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_SEND_MAX[$i]}," >> "$RESULTS_FILE"; done
-#    printf "\nMax recv," >> "$RESULTS_FILE"
-#    for ((i=0; i<${#RESULTS_NAMES[@]}; i++)); do printf "%s${RESULTS_RECV_MAX[$i]}," >> "$RESULTS_FILE"; done
 
     printf "\n" >> "$RESULTS_FILE"
 }
@@ -238,7 +218,18 @@ EOF
     fi
 
     log "Installing Istio"
-    go run istioctl/cmd/istioctl/main.go install $CONTEXT -d manifests/ --set hub="$HUB" --set tag="$TAG" -y $@ $secret --set values.global.imagePullPolicy=Always
+    params="install $CONTEXT -y $@ $secret --set values.global.imagePullPolicy=Always"
+    
+    # Set hub and tag if provided
+    if [[ ! -z "$HUB" ]]; then
+        params="$params --set hub=\"$HUB\""
+    fi
+    if [[ ! -z "$TAG" ]]; then
+        params="$params --set tag=\"$TAG\""
+    fi
+
+    runIstioctl $params
+
     if [[ $? -ne 0 ]]; then
         log "Error: istioctl install failed"
         return 1
@@ -257,10 +248,17 @@ applyImagePullSecret() {
     fi
 }
 
+runIstioctl() {
+    if [[ -z "$ISTIOCTL_PATH" ]]; then
+        go run $AMBIENT_REPO_DIR/istioctl/cmd/istioctl/main.go $@ -d manifests/
+    else
+        $ISTIOCTL_PATH $@
+    fi
+}
 
 cleanupCluster() {
     log "Cleaning up cluster"
-    go run istioctl/cmd/istioctl/main.go uninstall --purge -y $CONTEXT || true
+    runIstioctl uninstall --purge -y $CONTEXT
     kctl delete -n $TESTING_NAMESPACE -f "$DIR/../yaml" --ignore-not-found=true || true
     kctl delete ns istio-system || true
     kctl delete ns $TESTING_NAMESPACE || true
@@ -292,16 +290,12 @@ runTest() {
 
 . $DIR/tests.sh
 
-pushd "$AMBIENT_REPO_DIR" || exit
-
 trap "trapCtrlC" 2
 
 # Run the tests
 # These are in loops as EKS has proven to be predictably unpredictable on if a test will actually complete..
 # so on failure, clean up.. wait.. and just try again
 runTests
-
-popd || exit
 
 log "All tests completed, writing results"
 
