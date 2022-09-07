@@ -160,11 +160,11 @@ EOF
     return 0
 }
 
-ambientWithWTs() {
+ambientWithWPs() {
     profile="ambient"
-    wt="$DIR/../yaml/waypointtunnel.yaml"
+    wp="$DIR/../yaml/waypointtunnel.yaml"
     if [[ ! -z "$1" ]]; then
-        wt="$DIR/../yaml/$1"
+        wp="$DIR/../yaml/$1"
     fi
 
     log "Installing Istio with profile: $profile"
@@ -191,18 +191,18 @@ EOF
         return 1
     fi
 
-    log "Applying Waypoint Tunnel"
-    kctl apply -n $TESTING_NAMESPACE -f "$wt"
+    log "Applying Waypoint Proxy"
+    kctl apply -n $TESTING_NAMESPACE -f "$wp"
 
     sleep 10
 
     kctl -n $TESTING_NAMESPACE wait pods -l ambient-type=waypoint --for condition=Ready --timeout=120s
     if [[ $? -ne 0 ]]; then
-        log "Error: Waypoint Tunnel deployment failed"
+        log "Error: Waypoint Proxy deployment failed"
         return 1
     fi
 
-    runPerfTest "Ambient w/ Waypoint Tunnel"
+    runPerfTest "Ambient w/ Waypoint Proxy"
     if [[ $? -ne 0 ]]; then
         log "Error: testing failed"
         return 1

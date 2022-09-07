@@ -72,4 +72,4 @@ Then just run:
 ## Few Things To Notice
 * mTLS is enabled in the service mesh in the Istio/Ambient scenarios
 * You can modify the scripts arguments to change the tests behavior. See script variables descriptions below.
-* The reason for manually deploying the Waypoint Tunnels resources instead of Gateways is to make sure the client Waypoint Tunnel is on the same node of the client workload and the similar requirement for the server Waypoint Tunnel.
+* The reason for manually deploying the Waypoint Tunnels resources instead of Gateways is to make sure the client Waypoint Proxy is on the same node of the client workload and the similar requirement for the server Waypoint Proxy.

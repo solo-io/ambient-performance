@@ -104,9 +104,9 @@ deployWorkloads() {
 }
 
 runTests() {
-    wt="waypointtunnel.yaml"
+    wp="waypointtunnel.yaml"
     if [[ "$PERF_CLIENT" == "fortio" ]]; then
-      wt="waypointtunnel-fortio.yaml"
+      wp="waypointtunnel-fortio.yaml"
     fi
 
     runTest "No Mesh" noMesh
@@ -114,7 +114,7 @@ runTests() {
 #     runTest "Sidecars w/ HBONE" sidecarsHBONE
     runPerfTest "Sidecars w/ HBONE" "skip"
     runTest "Ambient" ambient
-    runTest "Ambient w/ Waypoint Tunnel" ambientWithWTs $wt
+    runTest "Ambient w/ Waypoint Proxy" ambientWithWPs $wp
 
     echo "$FORTIO_RESULTS"
     echo ""
