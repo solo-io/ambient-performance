@@ -15,6 +15,32 @@ of connections, defaulting to 1000.
 
 * The performance test script in this project are executing redirection scripts and Istio installation from the [Istio Sidecarless](https://github.com/solo-io/istio-sidecarless) repo
 
+* OPTIONAL: Prometheus, Grafana and Node-Exporter can be installed to collect metrics and view the provided [analysis dashboard](https://github.com/solo-io/ambient-performance/blob/main/dashboard/ambient-performance-analysis.json):
+
+  ```bash
+  cat <<\EOF > ./values.yaml
+  alertmanager:
+    enabled: false
+  kubeStateMetrics:
+    enabled: false
+  nodeExporter:
+    enabled: true 
+  prometheus:
+    prometheusSpec:
+      retention: 60d
+  EOF
+
+  helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+  helm repo update
+
+  helm install kube-prometheus-stack \
+  prometheus-community/kube-prometheus-stack \
+  --version 30.0.1 \
+  --namespace monitoring \
+  --create-namespace \
+  -f values.yaml
+  ```
+
 ## Running with a config
 
 To allow chaining multiple clusters with the same config, a number of changes have been made.
