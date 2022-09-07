@@ -4,7 +4,7 @@ This folder has scripts and resources that can execute performance tests to exam
 
 For HTTP tests with [nighthawk](https://github.com/envoyproxy/nighthawk), the script will execute a nighthawk client that will send requests to the server service which is also a nighthawk running in a server mode.
 
-For HTTP tests with [fortio](https://github.com/fortio/fortio), the script will execute a fortio client that will send requests to a [httpbin](https://hub.docker.com/r/kennethreitz/httpbin/) service.
+For HTTP tests with [fortio](https://github.com/fortio/fortio), the script will execute a fortio client that will send requests to a [httpbin](https://github.com/postmanlabs/httpbin) service.
 
 For TCP tests, the script will execute an [iperf3](https://iperf.fr) client that will send requests to an iperf3 server for a given number
 of connections, defaulting to 1000.
