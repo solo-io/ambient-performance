@@ -238,7 +238,13 @@ EOF
     fi
 
     log "Installing Istio"
-    go run istioctl/cmd/istioctl/main.go install $CONTEXT -d manifests/ --set hub="$HUB" --set tag="$TAG" -y $@ $secret --set values.global.imagePullPolicy=Always
+    params="install $CONTEXT -d manifests/ --set hub=\"$HUB\" --set tag=\"$TAG\" -y $@ $secret --set values.global.imagePullPolicy=Always"
+    if [[ -z "$ISTIOCTL_PATH" ]]; then
+        go run $AMBIENT_REPO_DIR/istioctl/cmd/istioctl/main.go $params
+    else
+        $ISTIOCTL_PATH $params
+    fi
+
     if [[ $? -ne 0 ]]; then
         log "Error: istioctl install failed"
         return 1
@@ -292,16 +298,12 @@ runTest() {
 
 . $DIR/tests.sh
 
-pushd "$AMBIENT_REPO_DIR" || exit
-
 trap "trapCtrlC" 2
 
 # Run the tests
 # These are in loops as EKS has proven to be predictably unpredictable on if a test will actually complete..
 # so on failure, clean up.. wait.. and just try again
 runTests
-
-popd || exit
 
 log "All tests completed, writing results"
 
