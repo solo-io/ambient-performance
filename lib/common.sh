@@ -222,10 +222,10 @@ EOF
     
     # Set hub and tag if provided
     if [[ ! -z "$HUB" ]]; then
-        params="$params --set hub=\"$HUB\""
+        params="$params --set hub=$HUB"
     fi
     if [[ ! -z "$TAG" ]]; then
-        params="$params --set tag=\"$TAG\""
+        params="$params --set tag=$TAG"
     fi
 
     runIstioctl $params
