@@ -104,9 +104,9 @@ deployWorkloads() {
 }
 
 runTests() {
-    wp="waypointtunnel.yaml"
+    wp="waypointproxy.yaml"
     if [[ "$PERF_CLIENT" == "fortio" ]]; then
-      wp="waypointtunnel-fortio.yaml"
+      wp="waypointproxy-fortio.yaml"
     fi
 
     runTest "No Mesh" noMesh

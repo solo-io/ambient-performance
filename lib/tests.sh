@@ -162,7 +162,7 @@ EOF
 
 ambientWithWPs() {
     profile="ambient"
-    wp="$DIR/../yaml/waypointtunnel.yaml"
+    wp="$DIR/../yaml/waypointproxy.yaml"
     if [[ ! -z "$1" ]]; then
         wp="$DIR/../yaml/$1"
     fi
