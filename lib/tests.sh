@@ -162,6 +162,10 @@ EOF
 
 ambientWithPEPs() {
     profile="ambient"
+    pep="$DIR/../yaml/pep.yaml"
+    if [[ ! -z "$1" ]]; then
+        pep="$DIR/../yaml/$1"
+    fi
 
     log "Installing Istio with profile: $profile"
     installIstio --set profile=$profile
@@ -187,10 +191,12 @@ EOF
         return 1
     fi
 
-    kctl apply -n $TESTING_NAMESPACE -f "$DIR/../yaml/pep.yaml"
-    sleep 120
-#    ambient-proxy: benchmark-client-waypoint-proxy
-    kctl -n $TESTING_NAMESPACE wait pods -l ambient-proxy=benchmark-client-waypoint-proxy --for condition=Ready --timeout=120s
+    log "Generating PEP deployment"
+    kctl apply -n $TESTING_NAMESPACE -f "$pep"
+
+    sleep 10
+
+    kctl -n $TESTING_NAMESPACE wait pods -l ambient-type=pep --for condition=Ready --timeout=120s
     if [[ $? -ne 0 ]]; then
         log "Error: PEP deployment failed"
         return 1

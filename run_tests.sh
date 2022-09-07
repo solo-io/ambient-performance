@@ -45,6 +45,21 @@ fi
 HUB=`yq '.hub' "$config_file"`
 TAG=`yq '.tag' "$config_file"`
 
+PERF_CLIENT=`yq '.perf_client' "$config_file"`
+if [[ "$PERF_CLIENT" == "null"  ]]; then
+    PERF_CLIENT="nighthawk"
+fi
+
+TEST_WAIT=`yq '.test_wait' "$config_file"`
+if [[ "$TEST_WAIT" == "null"  ]]; then
+    TEST_WAIT="1"
+fi
+
+SERVER_SCALE=`yq '.server_scale' "$config_file"`
+if [[ "$SERVER_SCALE" == "null"  ]]; then
+    SERVER_SCALE="1"
+fi
+
 cat <<EOF > "$FINAL_RESULT"
 Test run: $(date)
 
@@ -74,6 +89,9 @@ for i in $(seq 0 $((${NUM_CLUSTERS} - 1))); do
     IMAGE_PULL_SECRET=$(yq -o json "$config_file" | jq -er '.clusters['$i'].image_pull_secret | values' || echo $IMAGE_PULL_SECRET)
     TEST_TYPE_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].test_type | values' || echo $TEST_TYPE)
     COUNT_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].count | values' || echo $COUNT)
+    PERF_CLIENT_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].perf_client | values' || echo $PERF_CLIENT)
+    TEST_WAIT_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].test_wait | values' || echo $TEST_WAIT)
+    SERVER_SCALE_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].server_scale | values' || echo $SERVER_SCALE)
 
     if [[ "$TEST_TYPE_CLUSTER" != "http" && "$TEST_TYPE_CLUSTER" != "tcp" && "$TEST_TYPE_CLUSTER" != "tcp-throughput" ]]; then
         echo "Invalid test type: $TEST_TYPE_CLUSTER... skipping $CONTEXT_CLUSTER"
@@ -100,8 +118,8 @@ for i in $(seq 0 $((${NUM_CLUSTERS} - 1))); do
         log "Running tests for cluster: $CONTEXT_CLUSTER"
         log "Test type: $TEST_TYPE_CLUSTER"
         if [[ "$TEST_TYPE_CLUSTER" == "http" ]]; then
-            log "Running test: " SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" NIGHTHAWK_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./perf_tests.sh
-            SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" NIGHTHAWK_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./lib/http_perf_tests.sh
+            log "Running test: " SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" PERF_CLIENT_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./perf_tests.sh
+            SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" PERF_CLIENT_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" TEST_WAIT="$TEST_WAIT_CLUSTER" SERVER_SCALE="$SERVER_SCALE_CLUSTER" PERF_CLIENT="$PERF_CLIENT_CLUSTER" ./lib/http_perf_tests.sh
         else
             log "Running test: " TEST_TYPE="$TEST_TYPE_CLUSTER" COUNT="$COUNT_CLUSTER" PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./tcp_perf_tests.sh
             TEST_TYPE="$TEST_TYPE_CLUSTER" COUNT="$COUNT_CLUSTER" PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./lib/tcp_perf_tests.sh
@@ -125,10 +143,12 @@ for i in $(seq 0 $((${NUM_CLUSTERS} - 1))); do
         fi
     done
 
-    sleep 5 # Give time for file to be written to disk
+    if [[ $PERF_CLIENT == "nighthawk" ]]; then
+        sleep 5 # Give time for file to be written to disk
 
-    echo "Benchmark client parameters: $PARAMS_CLUSTER" | tee -a "$FINAL_RESULT"
-    echo "Protocol: $protocol" | tee -a "$FINAL_RESULT"
-    echo "------------- $CONTEXT_CLUSTER -------------" | tee -a "$FINAL_RESULT"
-    RESULTS_FILE="$RESULT_FILE" ./conv_results.sh | tee -a "$FINAL_RESULT"
+        echo "Benchmark client parameters: $PARAMS_CLUSTER" | tee -a "$FINAL_RESULT"
+        echo "Protocol: $protocol" | tee -a "$FINAL_RESULT"
+        echo "------------- $CONTEXT_CLUSTER -------------" | tee -a "$FINAL_RESULT"
+        RESULTS_FILE="$RESULT_FILE" ./conv_results.sh | tee -a "$FINAL_RESULT"
+    fi
 done

@@ -4,8 +4,8 @@
 startTime=$(date +%s)
 DIR="$( cd "$( dirname "$0" )" && pwd )"
 TMPDIR=$(mktemp -d)
-NIGHTHAWK_PARAMS=${NIGHTHAWK_PARAMS:-"--concurrency 1 --output-format json --rps 200 --duration 60"}
-# NIGHTHAWK_PARAMS="--concurrency 1 --output-format json --max-requests-per-connection 1 --rps 200 --duration 60"
+PERF_CLIENT_PARAMS=${PERF_CLIENT_PARAMS:-"--concurrency 1 --output-format json --rps 200 --duration 300"}
+# PERF_CLIENT_PARAMS="--concurrency 1 --output-format json --max-requests-per-connection 1 --rps 200 --duration 60"
 SERVICE_PORT_NAME=${SERVICE_PORT_NAME:-"tcp-enforcment"}
 AMBIENT_REPO_DIR=${AMBIENT_REPO_DIR:-"$DIR/../../istio-sidecarless"}
 DATERUN=$(date +"%Y%m%d-%H%M")
@@ -15,6 +15,8 @@ RESULTS_FILE=${RESULTS_FILE:-"$DIR/results/results-$DATERUN.csv"}
 if [[ ! -z "$CONTEXT" ]]; then
     CONTEXT="--context $CONTEXT"
 fi
+
+FORTIO_RESULTS=""
 
 IMAGE_PULL_SECRET_NAME=""
 if [[ ! -z "$IMAGE_PULL_SECRET" ]]; then
@@ -81,10 +83,14 @@ log() {
     echo "[$d] $*" | tee -a "log"
 }
 
+dateUTC() {
+    echo $(date -u '+%F %T')
+}
+
 writeResults() {
     echo "Run time: $(date)" > "$RESULTS_FILE"
     if [[ -z "$PARAMS" ]]; then
-        echo "Benchmark parameters: $NIGHTHAWK_PARAMS" >> "$RESULTS_FILE"
+        echo "Benchmark parameters: $PERF_CLIENT_PARAMS" >> "$RESULTS_FILE"
     else
         echo "Benchmark Parameters: $PARAMS" >> "$RESULTS_FILE"
     fi
@@ -131,7 +137,7 @@ writeResults() {
 writeThroughputResults() {
     echo "Run time: $(date)" > "$RESULTS_FILE"
     if [[ -z "$PARAMS" ]]; then
-        echo "Benchmark parameters: $NIGHTHAWK_PARAMS" >> "$RESULTS_FILE"
+        echo "Benchmark parameters: $PERF_CLIENT_PARAMS" >> "$RESULTS_FILE"
     else
         echo "Benchmark Parameters: $PARAMS" >> "$RESULTS_FILE"
     fi
@@ -255,7 +261,7 @@ applyImagePullSecret() {
 cleanupCluster() {
     log "Cleaning up cluster"
     go run istioctl/cmd/istioctl/main.go uninstall --purge -y $CONTEXT || true
-    kctl delete -n $TESTING_NAMESPACE -f "$DIR/../yaml" || true
+    kctl delete -n $TESTING_NAMESPACE -f "$DIR/../yaml" --ignore-not-found=true || true
     kctl delete ns istio-system || true
     kctl delete ns $TESTING_NAMESPACE || true
 }
@@ -269,7 +275,7 @@ trapCtrlC() {
 runTest() {
     while true; do
         log "Running test $1"
-        "$2"
+        "$2" ${@:3}
         ec=$?
         cleanupCluster
         if [[ "$ec" != "0" ]]; then
@@ -280,6 +286,8 @@ runTest() {
             break
         fi
     done
+    log "Waiting $TEST_WAIT seconds between tests"
+    sleep $TEST_WAIT
 }
 
 . $DIR/tests.sh
@@ -297,10 +305,12 @@ popd || exit
 
 log "All tests completed, writing results"
 
-if [[ $TEST_TYPE == "tcp-throughput" ]]; then
-    writeThroughputResults
-else
-    writeResults
+if [[ $PERF_CLIENT == "nighthawk" ]]; then
+    if [[ $TEST_TYPE == "tcp-throughput" ]]; then
+        writeThroughputResults
+    else
+        writeResults
+    fi
 fi
 
 endTime=$(date +%s)
