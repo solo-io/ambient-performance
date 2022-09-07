@@ -160,11 +160,11 @@ EOF
     return 0
 }
 
-ambientWithPEPs() {
+ambientWithWTs() {
     profile="ambient"
-    pep="$DIR/../yaml/pep.yaml"
+    wt="$DIR/../yaml/waypointtunnel.yaml"
     if [[ ! -z "$1" ]]; then
-        pep="$DIR/../yaml/$1"
+        wt="$DIR/../yaml/$1"
     fi
 
     log "Installing Istio with profile: $profile"
@@ -191,18 +191,18 @@ EOF
         return 1
     fi
 
-    log "Generating PEP deployment"
-    kctl apply -n $TESTING_NAMESPACE -f "$pep"
+    log "Applying Waypoint Tunnel"
+    kctl apply -n $TESTING_NAMESPACE -f "$wt"
 
     sleep 10
 
-    kctl -n $TESTING_NAMESPACE wait pods -l ambient-type=pep --for condition=Ready --timeout=120s
+    kctl -n $TESTING_NAMESPACE wait pods -l ambient-type=waypoint --for condition=Ready --timeout=120s
     if [[ $? -ne 0 ]]; then
-        log "Error: PEP deployment failed"
+        log "Error: Waypoint Tunnel deployment failed"
         return 1
     fi
 
-    runPerfTest "Ambient w/ Server PEP"
+    runPerfTest "Ambient w/ Waypoint Tunnel"
     if [[ $? -ne 0 ]]; then
         log "Error: testing failed"
         return 1
