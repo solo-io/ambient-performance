@@ -1,10 +1,10 @@
 # Performance Tests
 
-This folder has scripts and resources that can execute performance tests to examine the performance of Ambient and compare it to Istio or no-mesh setups.
+This folder has scripts and resources that can execute performance tests to examine the performance of Istio Ambient and compare it to Istio sidecar and no-mesh setups.
 
-The test deploys a client and a server deployments with anti-affinity that guarantees they are deployed on different nodes.
+For HTTP tests with [nighthawk](https://github.com/envoyproxy/nighthawk), the script will execute a nighthawk client that will send requests to the server service which is also a nighthawk running in a server mode.
 
-For HTTP tests, the script will execute a [nighthawk](https://github.com/envoyproxy/nighthawk) client that will send requests to the server service which is also a nighthawk running in a server mode.
+For HTTP tests with [fortio](https://github.com/fortio/fortio), the script will execute a fortio client that will send requests to a [httpbin](https://hub.docker.com/r/kennethreitz/httpbin/) service.
 
 For TCP tests, the script will execute an [iperf3](https://iperf.fr) client that will send requests to an iperf3 server for a given number
 of connections, defaulting to 1000.
@@ -14,16 +14,6 @@ of connections, defaulting to 1000.
 * yq and jq are required
 
 * The performance test script in this project are executing redirection scripts and Istio installation from the [Istio Sidecarless](https://github.com/solo-io/istio-sidecarless) repo
-
-By default it assumes the repo has been cloned under the same parent directory of this repo. If it's in a different path, set the `AMBIENT_REPO_DIR` environment variable using:
-
-```bash
-export AMBIENT_REPO_DIR=<path to repo>
-```
-
-This is solely to ensure we have access to the Ambient manifests and istioctl.
-
-* The Waypoint Tunnels are using the images from `$HUB` and `$TAG`. Make sure they are set and reference a valid pushed image.
 
 ## Running with a config
 
@@ -36,31 +26,23 @@ Valid test types:
 - tcp
 - tcp-throughput
 
-Valid k8s types:
-- kind (applies profile: ambient)
-- aws (applies profile: ambient-aws)
-- gcp (applies profile: ambient-gke)
+For http test types, there are two possible performance clients:
+- nighthawk
+- fortio
 
 An example:
 
 ```yaml
-service_port_name: "http"
-params: "--concurrency 1 --output-format json --rps 200 --duration 60"
-final_result: "/tmp/results.txt"
-hub: "harbor.hawton.haus/daniel"
-tag: "ambient"
-test_type: "tcp-throughput"
-count: 4000 # Only applies to TCP tests, how many times to run the test
+service_port_name: "tcp"
+params: '--concurrency 2 --output-format json --prefetch-connections --open-loop --experimental-h1-connection-reuse-strategy lru --connections 1 --rps 1000 --duration 60 --request-header "x-nighthawk-test-server-config: {response_body_size:1024}" --request-body-size 1024'
+final_result: "/home/daniel/results/test.txt"
+test_type: "http"
+perf_client: "nighthawk"
+istioctl_path: "/home/daniel/dev/ambient/istioctl"
 clusters:
-- context: "kind-ambient"
-  k8s_type: "kind"
-  result_file: "/tmp/results-ambient-kind.csv"
-- context: "daniel_hawton@daniel-ambient-perf.us-west-2.eksctl.io"
-  k8s_type: "aws"
-  result_file: "/tmp/results-ambient-aws.csv"
-- context: "gke_solo-test-236622_us-west1-c_daniel-istio"
-  k8s_type: "gcp"
-  result_file: "/tmp/results-ambient-gke.csv"
+- context: "gke_solo-test-236622_us-west1-c_daniel-ambient"
+  result_file: "/home/daniel/results/monday-http/1.csv"
+  params: '--concurrency 2 --output-format json --prefetch-connections --open-loop --experimental-h1-connection-reuse-strategy lru --connections 1 --rps 1000 --duration 60 --request-header "x-nighthawk-test-server-config: {response_body_size:1024}" --request-body-size 1024'
 ```
 
 Then just run:
@@ -69,7 +51,21 @@ Then just run:
 ./run_tests.sh
 ```
 
-## Few Things To Notice
-* mTLS is enabled in the service mesh in the Istio/Ambient scenarios
-* You can modify the scripts arguments to change the tests behavior. See script variables descriptions below.
-* The reason for manually deploying the Waypoint Tunnels resources instead of Gateways is to make sure the client Waypoint Proxy is on the same node of the client workload and the similar requirement for the server Waypoint Proxy.
+## Config options
+
+Some options can be defined globally, and/or in a cluster.  Globally will define defaults, with cluster overriding the default (if a cluster-level config option).
+
+| Option | Can be defined in cluster | Default | Description |
+| --- | --- | --- | --- |
+| params | yes | N/A | The parameters to pass to the performance client. |
+| context | yes | N/A | The kubeconfig context to use. |
+| test_type | yes | http | The type of test to run. Valid values are: http, tcp, tcp-throughput |
+| perf_client | yes | nighthawk | The performance client to use. Only used for http test_type. Valid values are: nighthawk, fortio |
+| count | yes | 1000 | How many times to run the test. Only used for tcp test_type. |
+| continue_on_fail | no | yes | If yes, will continue to next cluster if a test fails. |
+| final_result | no | /tmp/results.txt | The file to write the final results (ASCII table) to. |
+| hub | no | null | The hub to use for Istio. |
+| tag | no | null | The tag to use for Istio. |
+| test_wait | yes | 1 | The amount of time, in seconds, to wait after a test completes before starting the next. |
+| server_scale | yes | 1 | How many replicas to deploy, only used for http test types with the fortio performance client. |
+| result_file | yes | /tmp/results.csv | The file to write test results to, *only* a cluster level config item. |

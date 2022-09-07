@@ -14,7 +14,11 @@ if [[ "$PARAMS" == "null" ]]; then
     exit 1
 fi
 CONTEXT=`yq '.context' "$config_file"`
-K8S_TYPE=`yq '.k8s_type' "$config_file"`
+if [[ "$CONTEXT" == "null" ]]; then
+    echo "No context specified in config.yaml"
+    exit 1
+fi
+
 IMAGE_PULL_SECRET=`yq '.image_pull_secret' "$config_file"`
 
 # check if IMAGE_PULL_SECRETis null and zero it if so
@@ -102,7 +106,7 @@ for i in $(seq 0 $((${NUM_CLUSTERS} - 1))); do
 
     RESULT_FILE=$(yq -o json "$config_file" | jq -r '.clusters['$i'].result_file | values')
     if [[ -z "$RESULT_FILE" ]]; then
-        RESULT_FILE="/tmp/results.txt"
+        RESULT_FILE="/tmp/results.csv"
     fi
     if [[ "$TEST_TYPE_CLUSTER" == "http" ]]; then
         if [[ "$SERVICE_PORT_NAME_CLUSTER" == "http" ]]; then
