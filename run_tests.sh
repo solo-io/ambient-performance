@@ -28,10 +28,10 @@ if [[ "$PARAMS" == "null" ]]; then
     exit 1
 fi
 CONTEXT=`yq '.context' "$config_file"`
-if [[ "$CONTEXT" == "null" ]]; then
-    echo "No context specified in config.yaml"
-    exit 1
-fi
+# if [[ "$CONTEXT" == "null" ]]; then
+#     echo "No context specified in config.yaml"
+#     exit 1
+# fi
 
 IMAGE_PULL_SECRET=`yq '.image_pull_secret' "$config_file"`
 

@@ -1,49 +1,75 @@
+# NOTE: This README has been updated specifically for the blog [here](https://www.solo.io/blog/what-istio-ambient-mesh-means-for-your-wallet/), checkout the `main` branch for a full list of features
+
 # Performance Tests
 
 This folder has scripts and resources that can execute performance tests to examine the performance of Istio Ambient and compare it to Istio sidecar and no-mesh setups.
 
-For HTTP tests with [nighthawk](https://github.com/envoyproxy/nighthawk), the script will execute a nighthawk client that will send requests to the server service which is also a nighthawk running in a server mode.
-
 For HTTP tests with [fortio](https://github.com/fortio/fortio), the script will execute a fortio client that will send requests to a [httpbin](https://github.com/postmanlabs/httpbin) service.
-
-For TCP tests, the script will execute an [iperf3](https://iperf.fr) client that will send requests to an iperf3 server for a given number
-of connections, defaulting to 1000.
 
 ## Dependencies
 
 * yq and jq are required
 
-* The performance test script in this project are executing redirection scripts and Istio installation from the [Istio Sidecarless](https://github.com/solo-io/istio-sidecarless) repo
+* Prometheus, Grafana and Node-Exporter are required for collecting metrics and veiwing the analysis dashboard:
+
+```bash
+cat <<\EOF > ./values.yaml
+alertmanager:
+  enabled: false
+kubeStateMetrics:
+  enabled: false
+nodeExporter:
+  enabled: true 
+prometheus:
+  prometheusSpec:
+    retention: 60d
+EOF
+
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+helm install kube-prometheus-stack \
+prometheus-community/kube-prometheus-stack \
+--version 30.0.1 \
+--namespace monitoring \
+--create-namespace \
+-f values.yaml
+```
+
+* `istioctl` is required for installing Istio during the tests. The demo istioctl binary should be downloaded and placed on in your `PATH`.  The binaries can be found [here](https://gcsweb.istio.io/gcs/istio-build/dev/0.0.0-ambient.191fe680b52c1754ee72a06b3e0d3f9d116f2e82)
+
+* The Grafana dashboard can be viewed after importing the provided [json file](https://raw.githubusercontent.com/solo-io/ambient-performance/fortio-testing/dashboard/ambient-performance-analysis.json) via the web UI:
+
+```bash
+kubectl port-forward deployment/kube-prometheus-stack-grafana -n monitoring 3000
+```
+
+* Open [http://localhost:3000/dashboard/import](http://localhost:3000/dashboard/import) and then select to `Upload JSON file`
 
 ## Running with a config
 
-To allow chaining multiple clusters with the same config, a number of changes have been made.
-
-You can now use config.yaml to configure your test parameters.
-
-Valid test types:
-- http
-- tcp
-- tcp-throughput
-
-For http test types, there are two possible performance clients:
-- nighthawk
-- fortio
+You can now use provided sample `config.yaml` to configure your test parameters.  Users will need to add their kubectl cluster `context` to the provided file.
 
 An example:
 
 ```yaml
-service_port_name: "tcp"
-params: '--concurrency 2 --output-format json --prefetch-connections --open-loop --experimental-h1-connection-reuse-strategy lru --connections 1 --rps 1000 --duration 60 --request-header "x-nighthawk-test-server-config: {response_body_size:1024}" --request-body-size 1024'
-final_result: "/home/daniel/results/test.txt"
-test_type: "http"
-perf_client: "nighthawk"
-istioctl_path: "/home/daniel/dev/ambient/istioctl"
+service_port_name: "http"
+params: "-c 1 -qps 2 -t 10m"
+hub: "us-docker.pkg.dev/solo-io-ambient/istio"
+tag: "1.16-dev"
+perf_client: "fortio"
+test_wait: "180"
+server_scale: "10"
+istioctl_path: "istioctl"
 clusters:
-- context: "gke_solo-test-236622_us-west1-c_daniel-ambient"
-  result_file: "/home/daniel/results/http/1.csv"
-  params: '--concurrency 2 --output-format json --prefetch-connections --open-loop --experimental-h1-connection-reuse-strategy lru --connections 1 --rps 1000 --duration 60 --request-header "x-nighthawk-test-server-config: {response_body_size:1024}" --request-body-size 1024'
+- context: "<user_provided_context>"
 ```
+
+The provided `config.yaml` will have fortio call httpbin-v1 for 10 minutes, httpbin-v2 for 10 minutes and finally httpbin-v3 for another 10. There are four test scenarios, each running about 30 minutes with 3 minutes rest between - so a little over 2 hours to complete.
+
+The blog results were collected on a cluster with 3 nodes, each with 8 vCPU and 24GB memory.  Feel free to test different size clusters with different `-qps`, `-t` and `server_scale` parameters and check out the results!
+
+If selecting a test duration that runs for less than 10 minutes for each scenario, the `_over_time` prometheus queries may need adjusting to produce cleaner graphs.
 
 Then just run:
 
@@ -59,57 +85,28 @@ Some options can be defined globally, and/or in a cluster.  Globally will define
 | --- | --- | --- | --- |
 | context | yes | N/A | The kubeconfig context to use. |
 | continue_on_fail | no | yes | If yes, will continue to next cluster if a test fails. |
-| count | yes | 1000 | How many times to run the test. Only used for tcp test_type. |
-| final_result | no | /tmp/results.txt | The file to write the final results (ASCII table) to. |
 | hub | no | null | The hub to use for Istio. |
 | params | yes | N/A | The parameters to pass to the performance client. |
-| perf_client | yes | nighthawk | The performance client to use. Only used for http test_type. Valid values are: nighthawk, fortio |
-| result_file | yes | /tmp/results.csv | The file to write test results to, *only* a cluster level config item. |
 | server_scale | yes | 1 | How many replicas to deploy, only used for http test types with the fortio performance client. |
 | tag | no | null | The tag to use for Istio. |
 | test_type | yes | http | The type of test to run. Valid values are: http, tcp, tcp-throughput |
 | test_wait | yes | 1 | The amount of time, in seconds, to wait after a test completes before starting the next. |
 
-### Example Configs
+The end of the test script will provide UTC timestamps for entering into the analysis dashboard so users can see a specific scenario or a comparison over the entire test run.
 
-```yaml
-service_port_name: "tcp"
-params: '-n 100M --parallel 1 --bidir'
-final_result: "/home/daniel/results/testt.txt"
-hub: "us-docker.pkg.dev/solo-io-ambient/istio"
-tag: "1.16-dev"
-test_type: "tcp-throughput"
-count: 1000
-clusters:
-- context: "gke_solo-test-236622_us-west1-c_daniel-ambient"
-  result_file: "/home/daniel/results/test-throughput.csv"
-  params: '-n 100M'
-- context: "gke_solo-test-236622_us-west1-c_daniel-ambient"
-  test_type: "tcp"
-  result_file: "/home/daniel/results/test-latency.csv"
-  params: '-n 1K --parallel 1 --bidir'
-```
-
-```yaml
-params: '--concurrency 1 --simple-warmup --output-format json --rps 200 --duration 60'
-final_result: "/home/daniel/results/overall-gke.txt"
-hub: "us-docker.pkg.dev/solo-io-ambient/istio"
-tag: "1.16-dev"
-test_type: "http"
-context: "gke_solo-test-236622_us-west1-c_daniel-ambient"
-clusters:
-- result_file: "/home/daniel/results/http/1.csv"
-  params: '--concurrency 2 --output-format json --prefetch-connections --open-loop --experimental-h1-connection-reuse-strategy lru --connections 1 --rps 1000 --duration 60 --request-header "x-nighthawk-test-server-config: {response_body_size:1024}" --request-body-size 1024'
-- result_file: "/home/daniel/results/http/2.csv"
-  params: '--concurrency 2 --output-format json --prefetch-connections --open-loop --experimental-h1-connection-reuse-strategy lru --connections 2 --rps 1000 --duration 60 --request-header "x-nighthawk-test-server-config: {response_body_size:1024}" --request-body-size 1024'
-- result_file: "/home/daniel/results/http/8.csv"
-  params: '--concurrency 2 --output-format json --prefetch-connections --open-loop --experimental-h1-connection-reuse-strategy lru --connections 8 --rps 1000 --duration 60 --request-header "x-nighthawk-test-server-config: {response_body_size:1024}" --request-body-size 1024'
-- result_file: "/home/daniel/results/http/16.csv"
-  params: '--concurrency 2 --output-format json --prefetch-connections --open-loop --experimental-h1-connection-reuse-strategy lru --connections 16 --rps 1000 --duration 60 --request-header "x-nighthawk-test-server-config: {response_body_size:1024}" --request-body-size 1024'
-- result_file: "/home/daniel/results/http/32.csv"
-  params: '--concurrency 2 --output-format json --prefetch-connections --open-loop --experimental-h1-connection-reuse-strategy lru --connections 32 --rps 1000 --duration 60 --request-header "x-nighthawk-test-server-config: {response_body_size:1024}" --request-body-size 1024'
-- result_file: "/home/daniel/results/http/64.csv"
-  params: '--concurrency 2 --output-format json --prefetch-connections --open-loop --experimental-h1-connection-reuse-strategy lru --connections 64 --rps 1000 --duration 60 --request-header "x-nighthawk-test-server-config: {response_body_size:1024}" --request-body-size 1024'
-- result_file: "/home/daniel/results/http/128.csv"
-  params: '--concurrency 2 --output-format json --prefetch-connections --open-loop --experimental-h1-connection-reuse-strategy lru --connections 128 --rps 1000 --duration 60 --request-header "x-nighthawk-test-server-config: {response_body_size:1024}" --request-body-size 1024'
+```bash
+...
+...
+No Mesh
+start:      2022-09-07 17:06:14
+end:        2022-09-07 17:06:50
+Sidecars
+start:      2022-09-07 17:08:26
+end:        2022-09-07 17:09:02
+Ambient
+start:      2022-09-07 17:11:06
+end:        2022-09-07 17:11:42
+Ambient w/ Waypoint Proxy
+start:      2022-09-07 17:13:57
+end:        2022-09-07 17:14:33
 ```
