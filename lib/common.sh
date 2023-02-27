@@ -35,7 +35,7 @@ FORTIO_RESULTS=""
 IMAGE_PULL_SECRET_NAME=""
 if [[ ! -z "$IMAGE_PULL_SECRET" ]]; then
     if [[ -f "$IMAGE_PULL_SECRET" ]]; then
-        IMAGE_PULL_SECRET_NAME=`cat "$IMAGE_PULL_SECRET" | yq '.metadata.name'`
+        IMAGE_PULL_SECRET_NAME=`cat "$IMAGE_PULL_SECRET" | yq r '.metadata.name'`
         if [[ $? -ne 0 ]]; then
             echo "Error: could not parse image pull secret name from $IMAGE_PULL_SECRET"
             exit 1
@@ -253,6 +253,9 @@ EOF
         log "Removing temporary image pull secret yaml"
         rm "$TMPDIR/imagepullsecrets.yaml"
     fi
+
+    kctl get crd gateways.gateway.networking.k8s.io &> /dev/null || \
+  { kctl kustomize "github.com/kubernetes-sigs/gateway-api/config/crd?ref=v0.6.1" | kctl apply -f -; }
 }
 
 applyImagePullSecret() {

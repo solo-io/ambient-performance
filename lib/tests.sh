@@ -211,7 +211,7 @@ EOF
 
     sleep 10
 
-    kctl -n $TESTING_NAMESPACE wait pods -l ambient-type=waypoint --for condition=Ready --timeout=120s
+    kctl -n $TESTING_NAMESPACE wait pods -l gateway.istio.io/managed=istio.io-mesh-controller --for condition=Ready --timeout=120s
     if [[ $? -ne 0 ]]; then
         log "Error: Waypoint Proxy deployment failed"
         return 1

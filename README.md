@@ -55,8 +55,8 @@ An example:
 ```yaml
 service_port_name: "http"
 params: "-c 1 -qps 2 -t 10m"
-hub: "us-docker.pkg.dev/solo-io-ambient/istio"
-tag: "1.16-dev"
+hub: "istio"
+tag: "1.18.0-alpha.0"
 perf_client: "fortio"
 test_wait: "180"
 server_scale: "10"
