@@ -16,66 +16,66 @@
 
 dir="$( cd "$( dirname "$0" )" && pwd )"
 config_file=${CONFIG_FILE:-"$dir/config.yaml"}
-
-SERVICE_PORT_NAME=`yq '.service_port_name' "$config_file"`
+echo $config_file
+SERVICE_PORT_NAME=`yq r "$config_file" 'service_port_name'`
 if [[ "$SERVICE_PORT_NAME" == "null" ]]; then
     SERVICE_PORT_NAME="tcp-enforcement"
 fi
 
-PARAMS=`yq '.params' "$config_file"`
+PARAMS=`yq r "$config_file" 'params'`
 if [[ "$PARAMS" == "null" ]]; then
     echo "No params specified in config.yaml"
     exit 1
 fi
-CONTEXT=`yq '.context' "$config_file"`
+CONTEXT=`yq r "$config_file" 'context'`
 if [[ "$CONTEXT" == "null" ]]; then
     echo "No context specified in config.yaml"
     exit 1
 fi
 
-IMAGE_PULL_SECRET=`yq '.image_pull_secret' "$config_file"`
+IMAGE_PULL_SECRET=`yq r "$config_file" 'image_pull_secret'`
 
 # check if IMAGE_PULL_SECRETis null and zero it if so
 if [[ "$IMAGE_PULL_SECRET" == "null" ]]; then
     IMAGE_PULL_SECRET=""
 fi
 
-TEST_TYPE=`yq '.test_type' "$config_file"`
+TEST_TYPE=`yq r "$config_file" 'test_type'`
 if [[ "$TEST_TYPE" == "null" ]]; then
     TEST_TYPE="http"
 fi
 
-COUNT=`yq '.count' "$config_file"`
+COUNT=`yq r "$config_file" 'count'`
 if [[ "$COUNT" == "null"  ]]; then
     COUNT="1000"
 fi
 
-CONTINUE_ON_FAIL=`yq '.continue_on_fail' "$config_file"`
+CONTINUE_ON_FAIL=`yq r "$config_file" 'continue_on_fail'`
 if [[ "$CONTINUE_ON_FAIL" == "null"  ]]; then
     CONTINUE_ON_FAIL="yes"
 fi
 
-FINAL_RESULT=`yq '.final_result' "$config_file"`
+FINAL_RESULT=`yq  r "$config_file" 'final_result'`
 if [[ "$FINAL_RESULT" == "null"  ]]; then
     FINAL_RESULT="/tmp/results.txt"
 fi
 
-ISTIOCTL_PATH=`yq '.istioctl_path' "$config_file"`
+ISTIOCTL_PATH=`yq r "$config_file" 'istioctl_path'`
 
-HUB=`yq '.hub' "$config_file"`
-TAG=`yq '.tag' "$config_file"`
+HUB=`yq r "$config_file" 'hub'`
+TAG=`yq r "$config_file" 'tag'`
 
-PERF_CLIENT=`yq '.perf_client' "$config_file"`
+PERF_CLIENT=`yq r "$config_file" 'perf_client'`
 if [[ "$PERF_CLIENT" == "null"  ]]; then
     PERF_CLIENT="nighthawk"
 fi
 
-TEST_WAIT=`yq '.test_wait' "$config_file"`
+TEST_WAIT=`yq r "$config_file" 'test_wait'`
 if [[ "$TEST_WAIT" == "null"  ]]; then
     TEST_WAIT="1"
 fi
 
-SERVER_SCALE=`yq '.server_scale' "$config_file"`
+SERVER_SCALE=`yq r "$config_file" 'server_scale'`
 if [[ "$SERVER_SCALE" == "null"  ]]; then
     SERVER_SCALE="1"
 fi
@@ -95,30 +95,30 @@ log() {
     echo "[$d] $*" | tee -a "log"
 }
 
-NUM_CLUSTERS=`yq '.clusters | length' "$config_file"`
+NUM_CLUSTERS=`yq r "$config_file" 'clusters' --length`
 for i in $(seq 0 $((${NUM_CLUSTERS} - 1))); do
 
     # jq -er '.context | values
     # -e - return error if output is null
     # '| values' doesn't output null
     # see https://github.com/stedolan/jq/issues/354#issuecomment-478771540
-    CONTEXT_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].context | values' || echo $CONTEXT)
-    K8S_TYPE_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].k8s_type | values' || echo $K8S_TYPE)
-    SERVICE_PORT_NAME_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].service_port_name | values' || echo $SERVICE_PORT_NAME)
-    PARAMS_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].params | values' || echo $PARAMS)
-    IMAGE_PULL_SECRET=$(yq -o json "$config_file" | jq -er '.clusters['$i'].image_pull_secret | values' || echo $IMAGE_PULL_SECRET)
-    TEST_TYPE_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].test_type | values' || echo $TEST_TYPE)
-    COUNT_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].count | values' || echo $COUNT)
-    PERF_CLIENT_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].perf_client | values' || echo $PERF_CLIENT)
-    TEST_WAIT_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].test_wait | values' || echo $TEST_WAIT)
-    SERVER_SCALE_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].server_scale | values' || echo $SERVER_SCALE)
+    CONTEXT_CLUSTER=$(yq r --tojson "$config_file" | jq -er '.clusters['$i'].context | values' || echo $CONTEXT)
+    K8S_TYPE_CLUSTER=$(yq r --tojson "$config_file" | jq -er '.clusters['$i'].k8s_type | values' || echo $K8S_TYPE)
+    SERVICE_PORT_NAME_CLUSTER=$(yq r --tojson "$config_file" | jq -er '.clusters['$i'].service_port_name | values' || echo $SERVICE_PORT_NAME)
+    PARAMS_CLUSTER=$(yq r --tojson "$config_file" | jq -er '.clusters['$i'].params | values' || echo $PARAMS)
+    IMAGE_PULL_SECRET=$(yq r --tojson "$config_file" | jq -er '.clusters['$i'].image_pull_secret | values' || echo $IMAGE_PULL_SECRET)
+    TEST_TYPE_CLUSTER=$(yq r --tojson "$config_file" | jq -er '.clusters['$i'].test_type | values' || echo $TEST_TYPE)
+    COUNT_CLUSTER=$(yq r --tojson "$config_file" | jq -er '.clusters['$i'].count | values' || echo $COUNT)
+    PERF_CLIENT_CLUSTER=$(yq r --tojson "$config_file" | jq -er '.clusters['$i'].perf_client | values' || echo $PERF_CLIENT)
+    TEST_WAIT_CLUSTER=$(yq r --tojson "$config_file" | jq -er '.clusters['$i'].test_wait | values' || echo $TEST_WAIT)
+    SERVER_SCALE_CLUSTER=$(yq r --tojson "$config_file" | jq -er '.clusters['$i'].server_scale | values' || echo $SERVER_SCALE)
 
     if [[ "$TEST_TYPE_CLUSTER" != "http" && "$TEST_TYPE_CLUSTER" != "tcp" && "$TEST_TYPE_CLUSTER" != "tcp-throughput" ]]; then
         echo "Invalid test type: $TEST_TYPE_CLUSTER... skipping $CONTEXT_CLUSTER"
         continue
     fi
 
-    RESULT_FILE=$(yq -o json "$config_file" | jq -r '.clusters['$i'].result_file | values')
+    RESULT_FILE=$(yq r --tojson "$config_file" | jq -r '.clusters['$i'].result_file | values')
     if [[ -z "$RESULT_FILE" ]]; then
         RESULT_FILE="/tmp/results.csv"
     fi
