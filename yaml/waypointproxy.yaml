@@ -1,7 +1,7 @@
 apiVersion: gateway.networking.k8s.io/v1beta1
 kind: Gateway
 metadata:
-  name: benchmark-client
+  name: benchmark-server
   annotations:
     istio.io/for-service-account: benchmark-server
 spec:
