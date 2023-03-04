@@ -315,7 +315,6 @@ trap "trapCtrlC" 2
 runTests
 
 log "All tests completed, writing results"
-
 if [[ $PERF_CLIENT == "nighthawk" ]]; then
     if [[ $TEST_TYPE == "tcp-throughput" ]]; then
         writeThroughputResults
