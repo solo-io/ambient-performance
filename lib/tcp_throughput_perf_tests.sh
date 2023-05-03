@@ -105,8 +105,8 @@ deployWorkloads() {
 }
 
 runTests() {
-    runPerfTest "No Mesh" "skip"
-    runPerfTest "Sidecars" "skip"
+    runTest "No Mesh" "noMesh"
+    runTest "Sidecars" "sidecars"
     #runTest "Sidecars w/ HBONE" sidecarsHBONE
     runPerfTest "Sidecars w/ HBONE" "skip"
     runTest "Ambient" ambient

@@ -4,6 +4,11 @@ metadata:
   name: benchmark-client
 ---
 apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: benchmark-server
+---
+apiVersion: v1
 kind: Service
 metadata:
   name: benchmark-server
@@ -42,6 +47,7 @@ spec:
                 values:
                 - "benchmark-client"
             topologyKey: "kubernetes.io/hostname"
+      serviceAccountName: benchmark-server
       containers:
       - name: server
         image: us-west3-docker.pkg.dev/solo-test-236622/daniel-solo/iperf3:latest
