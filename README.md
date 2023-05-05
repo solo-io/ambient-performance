@@ -1,4 +1,4 @@
-# NOTE: This README has been updated specifically for the blog [here](https://www.solo.io/blog/what-istio-ambient-mesh-means-for-your-wallet/), checkout the `main` branch for a full list of features
+# NOTE: This README has been updated specifically for the blog [here](https://www.solo.io/blog/reduce-cloud-cost-istio-ambient-mesh/), checkout the `main` branch for a full list of features
 
 # Performance Tests
 
