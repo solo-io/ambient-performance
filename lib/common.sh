@@ -35,7 +35,7 @@ FORTIO_RESULTS=""
 IMAGE_PULL_SECRET_NAME=""
 if [[ ! -z "$IMAGE_PULL_SECRET" ]]; then
     if [[ -f "$IMAGE_PULL_SECRET" ]]; then
-        IMAGE_PULL_SECRET_NAME=`cat "$IMAGE_PULL_SECRET" | yq r '.metadata.name'`
+        IMAGE_PULL_SECRET_NAME=`cat "$IMAGE_PULL_SECRET" | yq '.metadata.name'`
         if [[ $? -ne 0 ]]; then
             echo "Error: could not parse image pull secret name from $IMAGE_PULL_SECRET"
             exit 1
