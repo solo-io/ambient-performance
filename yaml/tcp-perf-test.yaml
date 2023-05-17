@@ -50,7 +50,7 @@ spec:
       serviceAccountName: benchmark-server
       containers:
       - name: server
-        image: us-west3-docker.pkg.dev/solo-test-236622/daniel-solo/iperf3:latest
+        image: gihanson/iperf3:latest
         imagePullPolicy: Always
         command: ["iperf3"]
         args:
@@ -88,7 +88,7 @@ spec:
       serviceAccountName: benchmark-client
       containers:
       - name: client
-        image: us-west3-docker.pkg.dev/solo-test-236622/daniel-solo/iperf3:latest
+        image: gihanson/iperf3:latest
         imagePullPolicy: Always
         command: ["/bin/sleep"]
         args:
