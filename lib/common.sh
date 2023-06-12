@@ -233,7 +233,7 @@ EOF
 
     log "Installing Istio"
     params="install $CONTEXT -y $@ $secret --set values.global.imagePullPolicy=Always"
-    
+
     # Set hub and tag if provided
     if [[ ! -z "$HUB" ]]; then
         params="$params --set hub=$HUB"
@@ -278,7 +278,8 @@ cleanupCluster() {
     runIstioctl uninstall --purge -y $CONTEXT
     kctl delete -n $TESTING_NAMESPACE -f "$DIR/../yaml" --ignore-not-found=true || true
     kctl delete ns istio-system || true
-    kctl delete ns $TESTING_NAMESPACE || true
+    namespaces=$(kctl get ns | grep $TESTING_NAMESPACE | awk '{print $1}' | tr '\n' ' ')
+    kctl delete ns $namespaces || true
 }
 
 trapCtrlC() {

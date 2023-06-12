@@ -65,14 +65,7 @@ runPerfTest() {
         FORTIO_RESULTS+="
 $test_name
 start:      "$(dateUTC)
-        sleep 5
-        for i in 1 2 3; do
-            eval kctl exec -n $TESTING_NAMESPACE deploy/fortio-deploy -- /usr/bin/fortio load "$PERF_CLIENT_PARAMS" -loglevel Warning http://httpbin-v$i:8000/get
-            if [[ $? -ne 0 ]]; then
-                log "Error: fortio_client failed"
-                return 1
-            fi
-        done
+        sleep "$PERF_CLIENT_PARAMS"
         FORTIO_RESULTS+="
 end:        "$(dateUTC)
     fi
@@ -95,40 +88,29 @@ deployWorkloads() {
             return 1
         fi
     else
-        kctl -n $TESTING_NAMESPACE apply -f "$DIR/../yaml/httpbin.yaml"
-        log "Deployments applied to cluster, waiting for pods to be ready"
-        sleep 5
-        for i in 1 2 3; do
-            kctl -n $TESTING_NAMESPACE scale deploy/httpbin-v$i --replicas=$SERVER_SCALE
-            kctl wait pods -n $TESTING_NAMESPACE -l app=httpbin-v$i --for=condition=Ready --timeout=120s
-            if [[ $? -ne 0 ]]; then
-                log "Error: httpbin-v{$i} failed to scale"
-                return 1
-            fi
+        for i in $(eval echo "{1..$NAMESPACE_SCALE}"); do
+            kctl -n $TESTING_NAMESPACE$i apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/microservices-demo/main/release/kubernetes-manifests.yaml
+            log "Deployments applied to cluster, waiting for pods to be ready"
+            sleep 10
+            for app in `kubectl get deploy -n $TESTING_NAMESPACE$i | grep -v NAME | awk '{print $1}'`; do 
+                kubectl -n $TESTING_NAMESPACE$i scale deploy/$app --replicas=$SERVER_SCALE
+                # kctl wait pods -n $TESTING_NAMESPACE$i -l app=$app --for=condition=Ready --timeout=120s
+                # if [[ $? -ne 0 ]]; then
+                #     log "Error: $i failed to scale"
+                #     return 1
+                # fi
+            done
         done
-        kctl -n $TESTING_NAMESPACE apply -f "$DIR/../yaml/fortio-deploy.yaml"
-        sleep 5
-        kctl wait pods -n $TESTING_NAMESPACE -l app=fortio --for=condition=Ready --timeout=120s
-        if [[ $? -ne 0 ]]; then
-            log "Error: fortio pod failed to start"
-            return 1
-        fi
     fi
-    sleep 5
+    sleep 20
 }
 
 runTests() {
-    wp="waypointproxy.yaml"
-    if [[ "$PERF_CLIENT" == "fortio" ]]; then
-      wp="waypointproxy-fortio.yaml"
-    fi
-
-    runTest "No Mesh" noMesh
+    runPerfTest "No Mesh" "skip"
     runTest "Sidecars" sidecars
-#     runTest "Sidecars w/ HBONE" sidecarsHBONE
     runPerfTest "Sidecars w/ HBONE" "skip"
     runTest "Ambient" ambient
-    runTest "Ambient w/ Waypoint Proxy" ambientWithWPs $wp
+    runTest "Ambient w/ Waypoint Proxy" ambientWithWPs
 
     echo "$FORTIO_RESULTS"
     echo ""

@@ -28,10 +28,6 @@ if [[ "$PARAMS" == "null" ]]; then
     exit 1
 fi
 CONTEXT=`yq '.context' "$config_file"`
-# if [[ "$CONTEXT" == "null" ]]; then
-#     echo "No context specified in config.yaml"
-#     exit 1
-# fi
 
 IMAGE_PULL_SECRET=`yq '.image_pull_secret' "$config_file"`
 
@@ -80,6 +76,11 @@ if [[ "$SERVER_SCALE" == "null"  ]]; then
     SERVER_SCALE="1"
 fi
 
+NAMESPACE_SCALE=`yq '.namespace_scale' "$config_file"`
+if [[ "$NAMESPACE_SCALE" == "null"  ]]; then
+    NAMESPACE_SCALE="1"
+fi
+
 cat <<EOF > "$FINAL_RESULT"
 Test run: $(date)
 
@@ -112,6 +113,7 @@ for i in $(seq 0 $((${NUM_CLUSTERS} - 1))); do
     PERF_CLIENT_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].perf_client | values' || echo $PERF_CLIENT)
     TEST_WAIT_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].test_wait | values' || echo $TEST_WAIT)
     SERVER_SCALE_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].server_scale | values' || echo $SERVER_SCALE)
+    NAMESPACE_SCALE_CLUSTER=$(yq -o json "$config_file" | jq -er '.clusters['$i'].namespace_scale | values' || echo $NAMESPACE_SCALE)
 
     if [[ "$TEST_TYPE_CLUSTER" != "http" && "$TEST_TYPE_CLUSTER" != "tcp" && "$TEST_TYPE_CLUSTER" != "tcp-throughput" ]]; then
         echo "Invalid test type: $TEST_TYPE_CLUSTER... skipping $CONTEXT_CLUSTER"
@@ -138,8 +140,8 @@ for i in $(seq 0 $((${NUM_CLUSTERS} - 1))); do
         log "Running tests for cluster: $CONTEXT_CLUSTER"
         log "Test type: $TEST_TYPE_CLUSTER"
         if [[ "$TEST_TYPE_CLUSTER" == "http" ]]; then
-            log "Running test: " ISTIOCTL_PATH="$ISTIOCTL_PATH" SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" PERF_CLIENT_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" TEST_WAIT="$TEST_WAIT_CLUSTER" SERVER_SCALE="$SERVER_SCALE_CLUSTER" PERF_CLIENT="$PERF_CLIENT_CLUSTER" ./lib/http_perf_tests.sh
-            ISTIOCTL_PATH="$ISTIOCTL_PATH" SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" PERF_CLIENT_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" TEST_WAIT="$TEST_WAIT_CLUSTER" SERVER_SCALE="$SERVER_SCALE_CLUSTER" PERF_CLIENT="$PERF_CLIENT_CLUSTER" ./lib/http_perf_tests.sh
+            log "Running test: " ISTIOCTL_PATH="$ISTIOCTL_PATH" SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" PERF_CLIENT_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" TEST_WAIT="$TEST_WAIT_CLUSTER" SERVER_SCALE="$SERVER_SCALE_CLUSTER" NAMESPACE_SCALE="$NAMESPACE_SCALE_CLUSTER" PERF_CLIENT="$PERF_CLIENT_CLUSTER" ./lib/http_perf_tests.sh
+            ISTIOCTL_PATH="$ISTIOCTL_PATH" SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" PERF_CLIENT_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" TEST_WAIT="$TEST_WAIT_CLUSTER" SERVER_SCALE="$SERVER_SCALE_CLUSTER" NAMESPACE_SCALE="$NAMESPACE_SCALE_CLUSTER" PERF_CLIENT="$PERF_CLIENT_CLUSTER" ./lib/http_perf_tests.sh
         else
             log "Running test: " ISTIOCTL_PATH="$ISTIOCTL_PATH" TEST_TYPE="$TEST_TYPE_CLUSTER" COUNT="$COUNT_CLUSTER" PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./lib/tcp_perf_tests.sh
             ISTIOCTL_PATH="$ISTIOCTL_PATH" TEST_TYPE="$TEST_TYPE_CLUSTER" COUNT="$COUNT_CLUSTER" PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./lib/tcp_perf_tests.sh

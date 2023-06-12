@@ -73,6 +73,16 @@ metadata:
   labels:
     istio-injection: enabled
 EOF
+    for i in $(eval echo "{1..$NAMESPACE_SCALE}"); do
+        cat <<EOF | kctl apply -f -
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: $TESTING_NAMESPACE$i
+  labels:
+    istio-injection: enabled
+EOF
+    done
     sleep 2
 
     applyImagePullSecret $TESTING_NAMESPACE
@@ -156,6 +166,16 @@ metadata:
   labels:
     istio.io/dataplane-mode: ambient
 EOF
+    for i in $(eval echo "{1..$NAMESPACE_SCALE}"); do
+        cat <<EOF | kctl apply -f -
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: $TESTING_NAMESPACE$i
+  labels:
+    istio.io/dataplane-mode: ambient
+EOF
+    done
     sleep 2
 
     applyImagePullSecret $TESTING_NAMESPACE
@@ -186,8 +206,6 @@ ambientWithWPs() {
     installIstio --set profile=$profile
 
     applyMutualTLS
-
-    log "Creating and labeling testing namespace"
     cat <<EOF | kctl apply -f -
 apiVersion: v1
 kind: Namespace
@@ -196,24 +214,39 @@ metadata:
   labels:
     istio.io/dataplane-mode: ambient
 EOF
+    log "Creating and labeling testing namespace"
+    for i in $(eval echo "{1..$NAMESPACE_SCALE}"); do
+        cat <<EOF | kctl apply -f -
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: $TESTING_NAMESPACE$i
+  labels:
+    istio.io/dataplane-mode: ambient
+EOF
+    done
     sleep 2
 
     applyImagePullSecret $TESTING_NAMESPACE
-
-    deployWorkloads
-    if [[ $? -ne 0 ]]; then
-        log "Error: deployment failed"
-        return 1
-    fi
-
     log "Applying Waypoint Proxy"
-    kctl apply -n $TESTING_NAMESPACE -f "$wp"
+    for i in $(eval echo "{1..$NAMESPACE_SCALE}"); do
+        runIstioctl x waypoint apply -n $TESTING_NAMESPACE$i
+    done
+#    kctl apply -n $TESTING_NAMESPACE -f "$wp"
 
     sleep 10
 
-    kctl -n $TESTING_NAMESPACE wait pods -l gateway.istio.io/managed=istio.io-mesh-controller --for condition=Ready --timeout=120s
+    for i in $(eval echo "{1..$NAMESPACE_SCALE}"); do
+        kctl -n $TESTING_NAMESPACE$i wait pods -l gateway.istio.io/managed=istio.io-mesh-controller --for condition=Ready --timeout=120s
+        if [[ $? -ne 0 ]]; then
+            log "Error: Waypoint Proxy deployment failed"
+            return 1
+        fi
+        kubectl -n $TESTING_NAMESPACE$i scale deploy/namespace-istio-waypoint --replicas=$SERVER_SCALE
+    done
+    deployWorkloads
     if [[ $? -ne 0 ]]; then
-        log "Error: Waypoint Proxy deployment failed"
+        log "Error: deployment failed"
         return 1
     fi
 
