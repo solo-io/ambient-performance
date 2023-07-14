@@ -711,7 +711,7 @@
             "uid": "Prometheus"
           },
           "exemplar": true,
-          "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=~\"test.*\"}[5m]))",
+          "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=~\"test.*\", container!=\"\"}[5m]))",
           "interval": "",
           "legendFormat": "Total CPU of workloads",
           "refId": "A"
@@ -811,7 +811,7 @@
             "uid": "Prometheus"
           },
           "exemplar": true,
-          "expr": "sum(container_memory_working_set_bytes{namespace=~\"test.*\"})",
+          "expr": "sum(container_memory_working_set_bytes{namespace=~\"test.*\", container!=\"\"})",
           "interval": "",
           "legendFormat": "Total memory of workloads",
           "refId": "A"
