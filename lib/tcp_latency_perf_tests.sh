@@ -44,7 +44,7 @@ runPerfTest() {
 
     log "Executing performance tests for: $test_name..."
     eval kctl exec -n $TESTING_NAMESPACE deploy/benchmark-client -- \
-        env COUNT=$COUNT ./run-latency.sh -c benchmark-server "$PARAMS" > "$RESULTS_JSON"
+        env COUNT=$COUNT ./run-latency.sh "$PARAMS" > "$RESULTS_JSON"
     if [[ $? -ne 0 ]]; then
         log "Error: iperf test failed"
         return 1
@@ -86,8 +86,6 @@ deployWorkloads() {
 runTests() {
     runTest "No Mesh" noMesh
     runTest "Sidecars" sidecars
-    #runTest "Sidecars w/ HBONE" sidecarsHBONE
-    runPerfTest "Sidecars w/ HBONE" "skip"
     runTest "Ambient" ambient
     runTest "Ambient w/ Waypoint Proxy" ambientWithWPs
 }

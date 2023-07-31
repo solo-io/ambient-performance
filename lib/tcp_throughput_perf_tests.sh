@@ -107,8 +107,6 @@ deployWorkloads() {
 runTests() {
     runTest "No Mesh" noMesh
     runTest "Sidecars" sidecars
-    #runTest "Sidecars w/ HBONE" sidecarsHBONE
-    runPerfTest "Sidecars w/ HBONE" "skip"
     runTest "Ambient" ambient
     runTest "Ambient w/ Waypoint Proxy" ambientWithWPs
 }

@@ -16,9 +16,9 @@
 
 RESULTS_FILE=${RESULTS_FILE:-perf_tests_results_tcp.csv}
 
-echo "| Perc.  | No Mesh  | w/ Sidecar | Sidecar (HBONE)  | Ambient          | Ambient (w/ Waypoint Proxy) |"
-while IFS=, read -r perc nomesh sidecar sidecarhbone ambient waypointproxy
+echo "| Perc.  | No Mesh  | w/ Sidecar | Ambient          | Ambient (w/ Waypoint Proxy) |"
+while IFS=, read -r perc nomesh sidecar ambient waypointproxy
 do
-	printf "| %-6s | %-8s | %-10s | %-16s | %-16s | %-28s |\n" \
-	    "$perc" "$nomesh" "$sidecar" "$sidecarhbone" "$ambient" "$waypointproxy"
+	printf "| %-6s | %-8s | %-10s | %-16s | %-27s |\n" \
+	    "$perc" "$nomesh" "$sidecar" "$ambient" "$waypointproxy"
 done < <(tail -n 10 "$RESULTS_FILE")
