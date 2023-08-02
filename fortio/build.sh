@@ -17,7 +17,7 @@
 set -ex
 
 HUB=${HUB:-gcr.io/solo-oss/ambient-performance}
-IMAGE=${IMAGE:-iperf3}
+IMAGE=${IMAGE:-fortio}
 TAG=${TAG:-latest}
 
 if [[ ! -z "$HUB" ]]; then

@@ -88,7 +88,7 @@ runPerfTest() {
 
 deployWorkloads() {
     log "Deploying workloads"
-    kctl -n $TESTING_NAMESPACE apply -f "$DIR/../yaml/tcp-perf-test.yaml"
+    kctl -n $TESTING_NAMESPACE apply -f "$DIR/../yaml/tcp-throughput-test.yaml"
     log "Deployments applied to cluster, waiting for pods to be ready"
     sleep 5 # Can take time for the deployment to be known to the Kubernetes API
     kctl rollout status -n $TESTING_NAMESPACE deploy/benchmark-client
