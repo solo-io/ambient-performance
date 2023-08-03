@@ -130,10 +130,6 @@ EOF
 
 ambientWithWPs() {
     profile="ambient"
-    wp="$DIR/../yaml/waypointproxy.yaml"
-    if [[ ! -z "$1" ]]; then
-        wp="$DIR/../yaml/$1"
-    fi
 
     log "Installing Istio with profile: $profile"
     installIstio --set profile=$profile
@@ -160,7 +156,11 @@ EOF
     fi
 
     log "Applying Waypoint Proxy"
-    kctl apply -n $TESTING_NAMESPACE -f "$wp"
+    if [[ ! -z "$1" ]]; then
+        kctl apply -n $TESTING_NAMESPACE -f "$DIR/../yaml/$1"
+    else
+        runIstioctl x waypoint apply -n $TESTING_NAMESPACE --service-account=benchmark-server
+    fi
 
     sleep 10
 
