@@ -17,6 +17,8 @@
 dir="$( cd "$( dirname "$0" )" && pwd )"
 config_file=${CONFIG_FILE:-"$dir/config.yaml"}
 
+echo "Running performance tests with config file: $config_file"
+
 SERVICE_PORT_NAME=`yq '.service_port_name' "$config_file"`
 if [[ "$SERVICE_PORT_NAME" == "null" ]]; then
     SERVICE_PORT_NAME="tcp-enforcement"
@@ -24,13 +26,11 @@ fi
 
 PARAMS=`yq '.params' "$config_file"`
 if [[ "$PARAMS" == "null" ]]; then
-    echo "No params specified in config.yaml"
-    exit 1
+    echo "No global params specified in config.yaml. Expecting per cluster."
 fi
 CONTEXT=`yq '.context' "$config_file"`
 if [[ "$CONTEXT" == "null" ]]; then
-    echo "No context specified in config.yaml"
-    exit 1
+    echo "No global context specified in config.yaml. Expecting per cluster."
 fi
 
 IMAGE_PULL_SECRET=`yq '.image_pull_secret' "$config_file"`
@@ -141,8 +141,8 @@ for i in $(seq 0 $((${NUM_CLUSTERS} - 1))); do
             log "Running test: " ISTIOCTL_PATH="$ISTIOCTL_PATH" SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" PERF_CLIENT_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" TEST_WAIT="$TEST_WAIT_CLUSTER" SERVER_SCALE="$SERVER_SCALE_CLUSTER" PERF_CLIENT="$PERF_CLIENT_CLUSTER" ./lib/http_perf_tests.sh
             ISTIOCTL_PATH="$ISTIOCTL_PATH" SERVICE_PORT_NAME="$SERVICE_PORT_NAME_CLUSTER" PERF_CLIENT_PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" TEST_WAIT="$TEST_WAIT_CLUSTER" SERVER_SCALE="$SERVER_SCALE_CLUSTER" PERF_CLIENT="$PERF_CLIENT_CLUSTER" ./lib/http_perf_tests.sh
         else
-            log "Running test: " ISTIOCTL_PATH="$ISTIOCTL_PATH" TEST_TYPE="$TEST_TYPE_CLUSTER" COUNT="$COUNT_CLUSTER" PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./lib/tcp_perf_tests.sh
-            ISTIOCTL_PATH="$ISTIOCTL_PATH" TEST_TYPE="$TEST_TYPE_CLUSTER" COUNT="$COUNT_CLUSTER" PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" ./lib/tcp_perf_tests.sh
+            log "Running test: " ISTIOCTL_PATH="$ISTIOCTL_PATH" TEST_TYPE="$TEST_TYPE_CLUSTER" COUNT="$COUNT_CLUSTER" PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" TEST_WAIT="$TEST_WAIT_CLUSTER" ./lib/tcp_perf_tests.sh
+            ISTIOCTL_PATH="$ISTIOCTL_PATH" TEST_TYPE="$TEST_TYPE_CLUSTER" COUNT="$COUNT_CLUSTER" PARAMS="$PARAMS_CLUSTER" RESULTS_FILE="$RESULT_FILE" CONTEXT="$CONTEXT_CLUSTER" K8S_TYPE="$K8S_TYPE_CLUSTER" HUB="$HUB" TAG="$TAG" IMAGE_PULL_SECRET="$IMAGE_PULL_SECRET" TEST_WAIT="$TEST_WAIT_CLUSTER" PERF_CLIENT="$PERF_CLIENT_CLUSTER" ./lib/tcp_perf_tests.sh
         fi
         
         EXIT_CODE=$?

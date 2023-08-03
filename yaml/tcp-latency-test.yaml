@@ -10,7 +10,7 @@ metadata:
 spec:
   ports:
   - name: benchmark
-    port: 5201
+    port: 8078
     protocol: TCP
   selector:
     app: benchmark-server
@@ -44,13 +44,13 @@ spec:
             topologyKey: "kubernetes.io/hostname"
       containers:
       - name: server
-        image: us-west3-docker.pkg.dev/solo-test-236622/daniel-solo/iperf3:latest
-        imagePullPolicy: Always
-        command: ["iperf3"]
+        image: gcr.io/solo-oss/ambient-performance/fortio:latest
+        imagePullPolicy: IfNotPresent
+        command: ["fortio"]
         args:
-        - -s
+        - tcp-echo
         ports:
-        - containerPort: 5201
+        - containerPort: 8078
           name: benchmark
 ---
 apiVersion: apps/v1
@@ -82,7 +82,7 @@ spec:
       serviceAccountName: benchmark-client
       containers:
       - name: client
-        image: us-west3-docker.pkg.dev/solo-test-236622/daniel-solo/iperf3:latest
+        image: gcr.io/solo-oss/ambient-performance/fortio:latest
         imagePullPolicy: Always
         command: ["/bin/sleep"]
         args:

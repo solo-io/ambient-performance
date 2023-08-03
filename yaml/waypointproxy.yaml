@@ -1,8 +1,12 @@
-apiVersion: gateway.networking.k8s.io/v1alpha2
+apiVersion: gateway.networking.k8s.io/v1beta1
 kind: Gateway
 metadata:
-  name: benchmark-client
+  name: benchmark-server
   annotations:
-    istio.io/service-account: benchmark-client
+    istio.io/for-service-account: benchmark-server
 spec:
-  gatewayClassName: istio-mesh
+  gatewayClassName: istio-waypoint
+  listeners:
+  - name: mesh
+    port: 15008
+    protocol: HBONE

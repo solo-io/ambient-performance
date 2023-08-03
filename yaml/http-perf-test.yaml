@@ -67,6 +67,11 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: benchmark-client
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: benchmark-server
 # ---
 # apiVersion: v1
 # kind: Service
@@ -89,7 +94,7 @@ metadata:
   name: benchmark-server
 spec:
   ports:
-  - name: tcp-enforcment
+  - name: tcp-enforcement
     port: 8080
     protocol: TCP
   selector:
@@ -128,6 +133,7 @@ spec:
       - name: nighthawk-test-server-config
         configMap:
           name: nighthawk-test-server-config
+      serviceAccountName: benchmark-server
       containers:
       - name: captured
         securityContext:

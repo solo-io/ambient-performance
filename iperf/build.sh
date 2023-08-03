@@ -16,7 +16,7 @@
 
 set -ex
 
-HUB=${HUB:-us-west3-docker.pkg.dev/solo-test-236622/daniel-solo}
+HUB=${HUB:-gcr.io/solo-oss/ambient-performance}
 IMAGE=${IMAGE:-iperf3}
 TAG=${TAG:-latest}
 

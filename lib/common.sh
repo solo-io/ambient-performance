@@ -231,7 +231,6 @@ EOF
         kctl apply -n istio-system -f $IMAGE_PULL_SECRET
     fi
 
-    log "Installing Istio"
     params="install $CONTEXT -y $@ $secret --set values.global.imagePullPolicy=Always"
     
     # Set hub and tag if provided
@@ -242,6 +241,7 @@ EOF
         params="$params --set tag=$TAG"
     fi
 
+    log "Installing Istio with params: $params"
     runIstioctl $params
 
     if [[ $? -ne 0 ]]; then
@@ -253,6 +253,9 @@ EOF
         log "Removing temporary image pull secret yaml"
         rm "$TMPDIR/imagepullsecrets.yaml"
     fi
+
+    kctl get crd gateways.gateway.networking.k8s.io &> /dev/null || \
+  { kctl kustomize "github.com/kubernetes-sigs/gateway-api/config/crd?ref=v0.6.1" | kctl apply -f -; }
 }
 
 applyImagePullSecret() {

@@ -44,7 +44,7 @@ runPerfTest() {
 
     log "Executing performance tests for: $test_name..."
     eval kctl exec -n $TESTING_NAMESPACE deploy/benchmark-client -- \
-        env COUNT=$COUNT ./run-latency.sh -c benchmark-server "$PARAMS" > "$RESULTS_JSON"
+        env COUNT=$COUNT ./run-latency.sh "$PARAMS" > "$RESULTS_JSON"
     if [[ $? -ne 0 ]]; then
         log "Error: iperf test failed"
         return 1
@@ -55,8 +55,8 @@ runPerfTest() {
     RESULTS_P90+=("$(jq -r '.p90' "$RESULTS_JSON")");
     RESULTS_P95+=("$(jq -r '.p95' "$RESULTS_JSON")");
     RESULTS_P99+=("$(jq -r '.p99' "$RESULTS_JSON")");
-    RESULTS_P999+=("NA");
-    RESULTS_P9999+=("NA");
+    RESULTS_P999+=("$(jq -r '.p999' "$RESULTS_JSON")");
+    RESULTS_P9999+=("$(jq -r '.p9999' "$RESULTS_JSON")");
     RESULTS_MEAN+=("$(jq -r '.mean' "$RESULTS_JSON")");
     RESULTS_STDDEV+=("$(jq -r '.stddev' "$RESULTS_JSON")");
     RESULTS_MAX+=("$(jq -r '.max' "$RESULTS_JSON")");
@@ -67,7 +67,7 @@ runPerfTest() {
 
 deployWorkloads() {
     log "Deploying workloads"
-    kctl -n $TESTING_NAMESPACE apply -f "$DIR/../yaml/tcp-perf-test.yaml"
+    kctl -n $TESTING_NAMESPACE apply -f "$DIR/../yaml/tcp-latency-test.yaml"
     log "Deployments applied to cluster, waiting for pods to be ready"
     sleep 5 # Can take time for the deployment to be known to the Kubernetes API
     kctl rollout status -n $TESTING_NAMESPACE deploy/benchmark-client
@@ -86,8 +86,6 @@ deployWorkloads() {
 runTests() {
     runTest "No Mesh" noMesh
     runTest "Sidecars" sidecars
-    #runTest "Sidecars w/ HBONE" sidecarsHBONE
-    runPerfTest "Sidecars w/ HBONE" "skip"
     runTest "Ambient" ambient
     runTest "Ambient w/ Waypoint Proxy" ambientWithWPs
 }

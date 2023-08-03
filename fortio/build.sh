@@ -14,11 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-RESULTS_FILE=${RESULTS_FILE:-perf_tests_results_tcp.csv}
+set -ex
 
-echo "| Perc.  | No Mesh  | w/ Sidecar | Ambient          | Ambient (w/ Waypoint Proxy) |"
-while IFS=, read -r perc nomesh sidecar ambient waypointproxy
-do
-	printf "| %-6s | %-8s | %-10s | %-16s | %-27s |\n" \
-	    "$perc" "$nomesh" "$sidecar" "$ambient" "$waypointproxy"
-done < <(tail -n 10 "$RESULTS_FILE")
+HUB=${HUB:-gcr.io/solo-oss/ambient-performance}
+IMAGE=${IMAGE:-fortio}
+TAG=${TAG:-latest}
+
+if [[ ! -z "$HUB" ]]; then
+    HUB="$HUB/"
+fi
+
+docker build -t $HUB$IMAGE:$TAG .
+docker push $HUB$IMAGE:$TAG
